@@ -12,6 +12,8 @@ There is no H1. The published page takes its title from the slug.
 
 ## Page structure
 
+Published skill pages are durable human-facing project documents. Apply the `clean-mode` skill when writing or revising them: put the important information first, use simple headings, and keep each section scannable.
+
 Fill the template below, keeping its order. The **fixed frame** (`## What it does`, `## When to reach for it`, `## Where it fits`) appears on every page. `## Prerequisites` and the free-form substance sections carry only what this particular skill needs; delete the rest.
 
 Four sections make a page worth reading: `What it does`, `When to reach for it`, `Common questions`, `It's working if`. The first two orient the reader; the last two are where the page stops summarising the skill and starts answering the reader's own situation. Each of the last two has a bar to clear, below, but treat a page that clears neither as unfinished, not as finished-and-short.

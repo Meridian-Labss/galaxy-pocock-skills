@@ -1,6 +1,6 @@
 ---
 name: setup-matt-pocock-skills
-description: "Configure this repo for the engineering skills: set up its issue tracker, triage label vocabulary, and domain doc layout. Run once before first use of the other engineering skills."
+description: "Configure this repo for the engineering skills: set up its issue tracker, triage label vocabulary, domain doc layout, and clean-mode writing standard. Run once before first use of the other engineering skills."
 disable-model-invocation: true
 ---
 
@@ -11,6 +11,7 @@ Scaffold the per-repo configuration that the engineering skills assume:
 - **Issue tracker**: where issues live (GitHub by default; local markdown is also supported out of the box)
 - **Triage labels**: the strings used for the five canonical triage roles
 - **Domain docs**: where `CONTEXT.md` and ADRs live, and the consumer rules for reading them
+- **Clean mode**: the writing standard for durable human-facing project documents
 
 This is a prompt-driven skill, not a deterministic script. Explore, present what you found, confirm with the user, then write.
 
@@ -85,6 +86,10 @@ The block:
 
 ```markdown
 ## Agent skills
+
+### Human-facing documents
+
+Before drafting or revising any durable human-facing project document, call the Skill tool with `clean-mode` and apply its guidance. This covers technical designs, work tickets, pull requests, documentation, code comments, and work from skills outside this repository.
 
 ### Issue tracker
 
