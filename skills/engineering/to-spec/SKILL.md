@@ -6,6 +6,8 @@ disable-model-invocation: true
 
 This skill takes the current conversation context and codebase understanding and produces a spec. Do NOT interview the user; just synthesize what you already know.
 
+Before writing the spec, call the Skill tool with `clean-mode`. Apply it to the technical design: put the summary and key decisions first, use simple headings, and move detailed implementation reference below the fold.
+
 The issue tracker and triage label vocabulary should have been provided to you. If not, tell the user to run `/setup-matt-pocock-skills`.
 
 ## Process

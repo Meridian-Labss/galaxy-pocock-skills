@@ -8,6 +8,8 @@ disable-model-invocation: true
 
 Break a plan, spec, or conversation into a set of **tickets**: tracer-bullet vertical slices, each declaring the tickets that **block** it.
 
+Before drafting tickets, call the Skill tool with `clean-mode`. Apply it to ticket titles, descriptions, acceptance criteria, and blocking explanations so the work is easy for humans to scan and manage.
+
 The issue tracker and triage label vocabulary should have been provided to you. If not, tell the user to run `/setup-matt-pocock-skills`.
 
 ## Process

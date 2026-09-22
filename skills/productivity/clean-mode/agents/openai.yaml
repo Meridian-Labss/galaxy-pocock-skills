@@ -1,0 +1,3 @@
+interface:
+  display_name: "Clean Mode"
+  short_description: "Write project artefacts humans can scan quickly"

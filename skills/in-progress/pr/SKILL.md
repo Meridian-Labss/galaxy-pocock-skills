@@ -11,6 +11,8 @@ metadata:
 
 Use this template for writing the PR body:
 
+Call the Skill tool with `clean-mode` before writing the PR body. Keep the description digestible, put the important review information first, and summarise what changed rather than how it was implemented.
+
 ```markdown
 ## Summary
 
