@@ -64,4 +64,5 @@ Before finishing a durable human-facing artefact, check:
 - Can a human understand the important point from the top of the document?
 - Can they find the section they need by scanning headings and lists?
 - Does every detail earn its place, or should it move below the fold or into a separate reference?
+- Can a reader get what they need without wading through superfluous detail?
 - Does the title or file name provide a useful indicator to the nature of the content without opening the document?

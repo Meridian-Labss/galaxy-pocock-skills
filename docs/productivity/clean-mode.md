@@ -32,6 +32,7 @@ No. It means the important information is easy to find first. Detailed material 
 - A human can explain the document's purpose after reading only its opening section.
 - Headings, lists, and short paragraphs reveal the structure without a close read.
 - Technical detail is available without obscuring the decision, outcome, or intent.
+- A reader can get the information they need without having to read superfluous detail.
 - Code comments explain why the code is shaped this way without repeating the code or recording stale history.
 
 ## Where it fits
