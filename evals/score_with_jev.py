@@ -69,6 +69,21 @@ DIMENSIONS = {
             "Implementation detail is clearly separated into its own section(s), distinct from the summary",
         ],
     ),
+    "conciseness": Score(
+        instructions=(
+            "Does the document say each point once and stop, or does it pad points out "
+            "with hedging, throat-clearing, self-congratulatory comparisons, or sentences "
+            "that only restate something already said? Examples of the padding to look "
+            "for: 'worth noting', 'one correction to the sketch', 'this is not X, it's Y' "
+            "framing before the actual point, narrating the document's own reasoning "
+            "process, or a second sentence that just rephrases the first."
+        ),
+        criteria=[
+            "Frequent padding: many points are wrapped in hedging, throat-clearing, or restated more than once",
+            "Some padding: a few points carry unnecessary hedging or restatement, but most of the document is direct",
+            "Every point is stated once, directly, with no hedging, throat-clearing, or restatement",
+        ],
+    ),
 }
 
 

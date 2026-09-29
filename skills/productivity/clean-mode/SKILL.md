@@ -12,6 +12,7 @@ Clean mode is the default for durable human-facing project artefacts. Write so a
 - Prefer familiar language over jargon, technical terms, and code identifiers that require lookup.
 - Use short paragraphs and meaningful subtitles.
 - Use bullet points or numbered lists for parallel items, even when each item would otherwise open with a bold label. A paragraph per item is not a list, no matter how it is formatted.
+- State each point once and stop. Cut hedging and throat-clearing ("worth noting", "one correction to the sketch", "this is not X, it's Y"), self-congratulatory comparisons, and sentences that only restate a point already made.
 - Give files meaningful names. A reference to the file should tell a human what it contains.
 
 ## Technical designs
