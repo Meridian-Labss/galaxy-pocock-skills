@@ -18,6 +18,7 @@ import json
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 try:
@@ -111,26 +112,75 @@ def score_texts(texts):
     return scored
 
 
+def group_by_case(scored):
+    """{case_name: {"with": [dims, ...], "without": [dims, ...]}}"""
+    grouped = {}
+    for key, dims in scored.items():
+        name, arm, _ = key.rsplit("__", 2)
+        grouped.setdefault(name, {"with": [], "without": []})[arm].append(dims)
+    return grouped
+
+
+def average(runs_by_arm, arm, dim):
+    vals = [r[dim]["score"] for r in runs_by_arm[arm]]
+    return sum(vals) / len(vals) if vals else float("nan")
+
+
 def print_report(scored):
-    cases = sorted({key.rsplit("__", 2)[0] for key in scored})
-    for case in cases:
+    grouped = group_by_case(scored)
+    for case in sorted(grouped):
         print(f"=== {case} ===")
-        runs_by_arm = {"with": [], "without": []}
-        for key, dims in scored.items():
-            name, arm, _ = key.rsplit("__", 2)
-            if name == case:
-                runs_by_arm[arm].append(dims)
+        runs_by_arm = grouped[case]
         for arm in ("with", "without"):
             for dims in runs_by_arm[arm]:
                 vals = ", ".join(f"{d}={v['score']:.2f}" for d, v in dims.items())
                 print(f"  {arm:8s} {vals}")
         for dim in DIMENSIONS:
-            def avg(arm):
-                vals = [r[dim]["score"] for r in runs_by_arm[arm]]
-                return sum(vals) / len(vals) if vals else float("nan")
-            w, wo = avg("with"), avg("without")
+            w, wo = average(runs_by_arm, "with", dim), average(runs_by_arm, "without", dim)
             print(f"    delta {dim}: {w - wo:+.2f}")
         print()
+
+
+def write_markdown_report(scored, texts, plugin_root, case_glob):
+    grouped = group_by_case(scored)
+    runs = max((len(arms["with"]) for arms in grouped.values()), default=0)
+    generated_at = datetime.now(timezone.utc)
+    out_dir = Path(plugin_root) / "evals" / "results" / (generated_at.strftime("%Y-%m-%dT%H-%M-%S") + "-jev")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    report_path = out_dir / "report.md"
+
+    lines = [
+        "# Clean-mode Jev scoring report",
+        "",
+        f"Generated {generated_at.strftime('%Y-%m-%dT%H:%M:%SZ')} · case filter `{case_glob}` · {runs} run(s) per arm.",
+        "",
+    ]
+    for case in sorted(grouped):
+        runs_by_arm = grouped[case]
+        lines.append(f"## {case}")
+        lines.append("")
+        lines.append("| Dimension | With | Without | Delta |")
+        lines.append("|---|---|---|---|")
+        for dim in DIMENSIONS:
+            w, wo = average(runs_by_arm, "with", dim), average(runs_by_arm, "without", dim)
+            lines.append(f"| {dim} | {w:.2f} | {wo:.2f} | {w - wo:+.2f} |")
+        lines.append("")
+        for arm in ("with", "without"):
+            arm_texts = [texts[k] for k in texts if k.startswith(f"{case}__{arm}__")]
+            lines.append(f"<details><summary>{arm} outputs ({len(arm_texts)} run(s))</summary>")
+            lines.append("")
+            for i, text in enumerate(arm_texts, start=1):
+                lines.append(f"**Run {i}**")
+                lines.append("")
+                lines.append("```markdown")
+                lines.append(text)
+                lines.append("```")
+                lines.append("")
+            lines.append("</details>")
+            lines.append("")
+
+    report_path.write_text("\n".join(lines))
+    return report_path
 
 
 def main():
@@ -150,6 +200,9 @@ def main():
 
     scored = score_texts(texts)
     print_report(scored)
+
+    report_path = write_markdown_report(scored, texts, args.plugin_root, args.case)
+    print(f"Jev report: {report_path}")
 
     if args.out:
         Path(args.out).write_text(json.dumps(scored, indent=2))
