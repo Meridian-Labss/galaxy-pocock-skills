@@ -39,18 +39,21 @@ DIMENSIONS = {
     ),
     "scannability": Score(
         instructions=(
-            "Is the document's structure matched to its content, so a reader scanning "
-            "only the headings, the first sentence of each paragraph, and any bullet "
-            "lists gets everything important without reading every word? Judge both "
-            "directions of mismatch: undifferentiated prose that should have been "
-            "broken up, and content chopped into more headers or single-item sections "
-            "than the material warrants, forcing the reader to track many small "
-            "fragments instead of a few clear groupings."
+            "Is the document's structure matched to its content, at the level of "
+            "individual sections, not just the document as a whole? Headings alone do "
+            "not make a document scannable: a section can sit under a clear heading and "
+            "still be a dense, multi-sentence paragraph of reasoning that a reader must "
+            "read in full to follow. Check every section's body, not only whether "
+            "headings exist. Also judge the other two ways structure can mismatch "
+            "content: genuinely parallel items left as prose instead of a list, and "
+            "content chopped into more headers or single-item sections than it "
+            "warrants, forcing the reader to track many small fragments instead of a "
+            "few clear groupings."
         ),
         criteria=[
-            "No meaningful structure: long paragraphs with no headings or lists for parallel items; a reader must read every word to find the point",
-            "Some structure, but mismatched to the content: either genuinely parallel items are left as prose instead of a list, or unrelated remarks are split into their own headers/sections when they could be grouped, so the reader has to track many fragments instead of a few clear ones",
-            "Structure matches the content: short paragraphs, a bullet or numbered list for any set of genuinely parallel items, and related points grouped under a shared heading rather than each given its own fragment; scanning headings and lists alone conveys everything important",
+            "One or more sections (regardless of how many headings the document has) are dense, multi-sentence paragraphs of reasoning or explanation that a reader must read in full to get the point; or the whole document is undifferentiated prose with no headings or lists for parallel items",
+            "Most sections are scannable, but at least one section is a dense paragraph the reader must read in full, or genuinely parallel items are left as prose instead of a list, or unrelated remarks are split into their own headers when they could be grouped",
+            "Every section is itself scannable: short paragraphs throughout (including inside sections that explain reasoning or trade-offs), a bullet or numbered list for any set of genuinely parallel items, and related points grouped under a shared heading rather than each given its own fragment; scanning headings, first sentences, and lists alone conveys everything important, anywhere in the document",
         ],
     ),
     "detail_separated": Score(
@@ -77,7 +80,11 @@ def run_eval(case_glob, runs, plugin_root):
         "--trust-plugin", "--no-publish",
         "--json", str(out_path),
     ]
-    subprocess.run(cmd, check=True)
+    result = subprocess.run(cmd)
+    if result.returncode not in (0, 1):
+        # 1 means a case scored below --threshold, which is expected here:
+        # the whole point is comparing a lower-scoring "without" arm.
+        sys.exit(f"claude plugin eval failed (exit {result.returncode})")
     return json.loads(out_path.read_text())
 
 
