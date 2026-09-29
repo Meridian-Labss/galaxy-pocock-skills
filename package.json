@@ -12,7 +12,7 @@
     "changeset": "changeset",
     "version": "changeset version && node scripts/sync-plugin-version.mjs",
     "check-plugin-version": "node scripts/sync-plugin-version.mjs --check",
-    "eval:clean-mode": "claude plugin eval . --case \"clean-mode-*\" --trust-plugin --no-publish",
+    "eval:clean-mode": "claude plugin eval . --case \"clean-mode-*\" --trust-plugin --no-publish --scaffold",
     "eval:clean-mode:jev": "evals/run_jev.sh"
   },
   "devDependencies": {

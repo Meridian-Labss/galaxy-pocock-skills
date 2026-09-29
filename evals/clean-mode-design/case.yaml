@@ -1,0 +1,141 @@
+schema_version: "1.1"
+name: clean-mode-design
+runs: 3
+context:
+  scaffold_script: "./setup.sh"
+execution:
+  max_turns: 12
+  allowed_tools: [Skill, Read, Glob, Grep]
+  prompt: >
+    These are your own notes from today's ad-hoc chat about consolidating
+    some infra pain points, jotted down before they evaporate from your
+    brain. The code for the service this affects is checked out in your
+    current directory if you want to look at how any of this actually
+    works today.
+
+    context: we keep hitting the same shape of problem in three different
+    places and it's starting to feel dumb that they're not the same thing.
+
+    1. sessions: every deploy = mass logout, we deploy like 4-6x/day now
+    with the new pipeline so this is basically constant background pain,
+    also the load balancer round-robins so two requests from the same
+    user 200ms apart can hit different boxes that disagree on whether
+    that user is logged in, we've been blaming "flaky auth" in incident
+    channel for weeks and it's just this.
+
+    2. rate limits: same deal but nobody's noticed yet (or they have and
+    just assumed it was a one-off). every deploy also resets everyone's
+    request count to zero, so there's a window right after each release
+    where limits are effectively off. not a security incident so far as
+    anyone's found, but it's the kind of thing that becomes one.
+
+    3. feature flags: completely static right now, loaded from a file at
+    boot. product keeps asking "can we just turn X off" when a rollout
+    goes bad and the answer is always "let me ship a deploy" which takes
+    like 10-15 min. that's way too slow for a real incident.
+
+    4. there's apparently already a cleanup job that runs every 5 min and
+    does literally nothing right now, because nothing external needs
+    cleaning up yet. so at least the cron slot already exists.
+
+    proposal (rough): one shared redis, all three things (sessions, rate
+    limits, flags) move into it, the cleanup job actually does something
+    once there's something external to sweep. auth middleware, the rate
+    limiter, and the flags module all get swapped to read/write redis
+    instead of their own local state; call shapes probably don't change
+    much on the call site.
+
+    things people brought up and we did NOT resolve:
+
+    - do sessions, rate limits, and flags all go in ONE redis
+    instance/namespace, or does each get its own? someone said "just
+    prefix the keys" but nobody's thought about whether they have
+    different enough access patterns or failure tolerances to matter (a
+    flags outage is way less scary than a sessions outage)
+
+    - flags specifically: if flags become dynamic, do we need an admin
+    UI/endpoint to flip them, or is "redis-cli SET" an acceptable v1?
+    product will ask for a UI eventually regardless
+
+    - rate limiter: does moving it to redis change the algorithm? sliding
+    window in-process is easy; sliding window against a shared store
+    usually means switching to something like a token bucket or fixed
+    windows with redis INCR + EXPIRE, someone flagged this as "not just a
+    find-and-replace"
+
+    - failure mode if redis is down: for sessions we said fail closed
+    (treat as logged out) rather than mass-authenticate everyone. for
+    rate limits, failing closed means blocking all traffic on a redis
+    blip, which seems way worse than briefly having no rate limit. for
+    flags, failing closed probably means "all flags off," which could
+    itself be a bad day if a flag is guarding something important. these
+    three might need three different answers and that feels messy
+
+    - rollout: same "can't sign everyone out during the cutover" problem
+    as before, dual-write phase seems right again, but now it's
+    dual-write for three different things with three different migration
+    difficulties (sessions and rate limits regenerate naturally within
+    minutes; flags don't regenerate, they just ARE the config, so a
+    botched flags migration is more like a config outage)
+
+    - the cleanup job is currently a no-op; whoever builds this needs to
+    actually implement it instead of just deleting the TODO comment
+
+    need someone to turn this into an actual doc before we start
+    building. the code for the current state of all this (sessions, rate
+    limiting, flags, the empty cleanup job) is checked out in your
+    working directory if it's useful context; feel free to look at it,
+    but write the doc for a teammate who hasn't opened the code and isn't
+    going to before reading it.
+
+    Draft a short technical design document for the team to review before
+    this work starts. Reply with only the document, nothing else.
+graders:
+  - name: summary-first
+    type: llm
+    weight: 1
+    criteria: >
+      The document opens with a short summary of the proposed work (unifying
+      sessions, rate limits, and feature flags onto shared Redis storage to
+      fix restart/consistency/deploy-speed problems) before any
+      implementation detail. The opening is simple enough that a teammate
+      could read only it and understand what is being proposed and why,
+      without needing the full technical detail.
+  - name: structure
+    type: llm
+    weight: 1
+    criteria: >
+      The document uses clear headings so a reader can find the section they
+      need by scanning (e.g. separating the problem, the proposed approach,
+      and implementation detail). Detailed implementation reference is placed
+      below the summary rather than interleaved with it.
+  - name: scannability
+    type: llm
+    weight: 1
+    criteria: >
+      Where the document lists more than one parallel point (e.g. the three
+      failure-mode answers, the three migration difficulties, multiple open
+      questions), it uses an actual bullet or numbered list rather than a run
+      of paragraphs, even when each paragraph opens with a bold label. A
+      paragraph per point does not count as a list. A reader scanning only
+      headings, first sentences, and bullet lists should be able to get every
+      important point, including inside sections that explain reasoning or
+      trade-offs, without reading a dense paragraph in full.
+  - name: plain-language-summary
+    type: llm
+    weight: 1
+    criteria: >
+      The document's summary and problem statement avoid code identifiers,
+      file paths, and function or variable names that require opening the
+      code to understand (e.g. session-store.ts, checkRateLimit,
+      flags.json). Plain domain language describes the same ideas instead
+      (e.g. "the session store", "the rate limiter", "the flags file"), so a
+      teammate who has not opened the code can follow the summary. Specific
+      identifiers may appear later in an implementation-detail section, but
+      not in the parts a reader needs to understand what is being proposed
+      and why.
+  - name: skill-invoked
+    type: tool_used
+    tool: "Skill"
+    input_match: "clean-mode"
+    min: 1

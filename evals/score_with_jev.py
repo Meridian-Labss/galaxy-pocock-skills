@@ -78,7 +78,7 @@ def run_eval(case_glob, runs, plugin_root):
         "claude", "plugin", "eval", str(plugin_root),
         "--case", case_glob,
         "--runs", str(runs),
-        "--trust-plugin", "--no-publish",
+        "--trust-plugin", "--no-publish", "--scaffold",
         "--json", str(out_path),
     ]
     result = subprocess.run(cmd)
