@@ -39,14 +39,18 @@ DIMENSIONS = {
     ),
     "scannability": Score(
         instructions=(
-            "Can a reader scanning only the headings, the first sentence of each "
-            "paragraph, and any bullet lists understand what changed/is proposed and why, "
-            "without reading every word?"
+            "Is the document's structure matched to its content, so a reader scanning "
+            "only the headings, the first sentence of each paragraph, and any bullet "
+            "lists gets everything important without reading every word? Judge both "
+            "directions of mismatch: undifferentiated prose that should have been "
+            "broken up, and content chopped into more headers or single-item sections "
+            "than the material warrants, forcing the reader to track many small "
+            "fragments instead of a few clear groupings."
         ),
         criteria=[
-            "Dense, undifferentiated prose; no lists for parallel items; scanning misses important information",
-            "Some structure (a few short paragraphs or one list), but a reader still has to read closely to get the point",
-            "Short paragraphs and bullet/numbered lists for parallel items; scanning headings and lists alone conveys the key information",
+            "No meaningful structure: long paragraphs with no headings or lists for parallel items; a reader must read every word to find the point",
+            "Some structure, but mismatched to the content: either genuinely parallel items are left as prose instead of a list, or unrelated remarks are split into their own headers/sections when they could be grouped, so the reader has to track many fragments instead of a few clear ones",
+            "Structure matches the content: short paragraphs, a bullet or numbered list for any set of genuinely parallel items, and related points grouped under a shared heading rather than each given its own fragment; scanning headings and lists alone conveys everything important",
         ],
     ),
     "detail_separated": Score(
