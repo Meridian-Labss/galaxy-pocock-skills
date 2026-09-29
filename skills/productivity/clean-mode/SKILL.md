@@ -8,7 +8,7 @@ Clean mode is the default for durable human-facing project artefacts. Write so a
 ## General principles
 
 - Put the core information at the top. Move complex detail below the fold or into an attached document.
-- Use meaningful titles and simple section headings that are easy to remember and discuss.
+- Use simple titles and section headings that are easy to remember and discuss.
 - Prefer familiar language over jargon, technical terms, and code identifiers that require lookup.
 - Use short paragraphs and meaningful subtitles.
 - Use bullet points or numbered lists for parallel items.
@@ -51,8 +51,9 @@ Code comments are human integration points where people understand the intent of
 - Explain intent that is not clear from the code.
 - Keep comments short and close to the code they explain.
 - Prefer code that makes the explanation unnecessary.
-- Do not use comments as decision logs or records of recent changes.
-- Avoid distant file and identifier references that can become stale.
+- Preserve minimum rationale needed to understand current behaviour.
+- Keep change history in version control.
+- Avoid distant file and identifier references that can become stale, unless they are essential to understanding the code.
 - Remove comments whose information is now expressed by the code.
 
 ## Completion check
@@ -62,4 +63,4 @@ Before finishing a durable human-facing artefact, check:
 - Can a human understand the important point from the top of the document?
 - Can they find the section they need by scanning headings and lists?
 - Does every detail earn its place, or should it move below the fold or into a separate reference?
-- Is the title or file name meaningful without opening the document?
+- Does the title or file name provide a useful indicator to the nature of the content without opening the document?
