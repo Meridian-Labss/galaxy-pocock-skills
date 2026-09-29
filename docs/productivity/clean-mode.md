@@ -13,8 +13,8 @@ Reach for it when writing a technical design, ticket, pull request, project docu
 ## The four integration points
 
 - **Technical designs:** start with a short summary and keep the early design easy to discuss. Use diagrams when they clarify structure or flow.
-- **Work tickets:** put the outcome, scope, constraints, and acceptance criteria first. Keep implementer detail below the fold.
-- **Pull requests:** keep the diff small and the description digestible. Summarise what changed, name significant changes, and show evidence.
+- **Work tickets:** use a short title in plain domain language. Put the outcome, scope, constraints, and acceptance criteria first. Keep implementer detail below the fold.
+- **Pull requests:** use a short title in plain domain language. Keep the diff small and the description digestible. Summarise what changed and why, and show evidence. Give readers enough context to understand the description without opening referenced documents or code.
 - **Code comments:** explain local intent that the code cannot express. Keep comments short, avoid decision logs and change history, and remove stale explanations.
 
 ## Common questions

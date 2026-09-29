@@ -28,7 +28,7 @@ Technical designs are human integration points where people specify and discuss 
 Work tickets are human integration points where people manage planned, active, and completed work.
 
 - Put the outcome, scope, and important constraints first.
-- Use a short title that names the work in domain language.
+- Use a short title that names the work in plain domain language.
 - Put implementation detail below the fold or in an attached reference.
 - Make acceptance criteria individually scannable.
 
@@ -36,10 +36,12 @@ Work tickets are human integration points where people manage planned, active, a
 
 Pull requests are human integration points where people inspect ongoing work.
 
+- Use a short title that names the work in plain domain language.
 - Keep the diff as small as possible.
 - Make the description digestible enough to guide review attention.
-- Summarise what changed, not how it was implemented.
+- Summarise what changed and why.
 - Name the significant changes and the evidence that the work is correct.
+- Avoid references to documents or code that require the reader to look something up to understand.
 - Treat a description that cannot stay short as a signal to split the pull request.
 
 ## Code comments
