@@ -1,0 +1,87 @@
+schema_version: "1.1"
+name: clean-mode-design
+runs: 3
+context:
+  scaffold_script: "./setup.sh"
+execution:
+  max_turns: 12
+  model: claude-sonnet-5
+  allowed_tools: [Skill, Read, Glob, Grep]
+  prompt: >
+    These are your own notes from today's ad-hoc chat about consolidating
+    some infra pain points, typed fast before they evaporate from your
+    brain. The code for the service this affects is checked out in your
+    current directory if you want to look at how any of this actually
+    works today.
+
+    ok so the chat today, basically we keep hitting the same shape of
+    problem in three different places and it's starting to feel dumb that
+    they're not the same thing. sessions is the loud one, every deploy =
+    mass logout and we deploy like 4-6x/day now with the new pipeline so
+    it's constant background pain, plus the load balancer round-robins so
+    two requests from the same user 200ms apart can hit different boxes
+    that disagree on whether that user is logged in, we've been blaming
+    "flaky auth" in the incident channel for weeks and it's just this.
+    rate limits turn out to be the same deal except nobody's noticed, or
+    they noticed and assumed it was a one-off, every deploy also resets
+    everyone's request count to zero so there's a window right after each
+    release where limits are effectively off, not a security incident so
+    far as anyone's found but it's the kind of thing that becomes one.
+    and then feature flags which are completely static right now, loaded
+    from a file at boot, product keeps asking "can we just turn X off"
+    when a rollout goes bad and the answer is always "let me ship a
+    deploy" which takes 10-15 min, way too slow for a real incident. oh
+    and someone pointed out there's apparently already a cleanup job that
+    runs every 5 min and does literally nothing, because nothing external
+    needs cleaning up yet, so at least the cron slot exists.
+
+    the rough proposal was one shared redis, all three things move into
+    it, cleanup job actually does something once there's something
+    external to sweep, auth middleware and the rate limiter and the flags
+    module all get swapped to read/write redis instead of their own local
+    state, call shapes probably don't change much at the call sites.
+
+    we did NOT resolve a bunch of stuff though and it's all tangled
+    together in my head so getting it down before I lose it. whether
+    everything goes in ONE redis instance or each thing gets its own came
+    up, someone said "just prefix the keys" but nobody's thought about
+    whether the three have different enough access patterns or failure
+    tolerances to matter, a flags outage is way less scary than a
+    sessions outage after all. which connects to the redis-is-down
+    question, for sessions we said fail closed, treat everyone as logged
+    out rather than mass-authenticate them, but for rate limits failing
+    closed means blocking all traffic on a redis blip which seems way
+    worse than briefly having no rate limit, and for flags failing closed
+    probably means "all flags off" which could itself be a bad day if a
+    flag is guarding something important, so the three might need three
+    different answers and that feels messy but maybe it's fine? someone
+    also asked whether dynamic flags need an admin UI or endpoint to flip
+    them or if "redis-cli SET" is an acceptable v1, product will ask for
+    a UI eventually regardless. the rate limiter guy flagged that moving
+    it to redis is "not just a find-and-replace" because sliding window
+    in-process is easy but sliding window against a shared store usually
+    means switching algorithms, token bucket or fixed windows with INCR
+    plus EXPIRE or whatever. rollout has the same "can't sign everyone
+    out during the cutover" problem as always, dual-write phase seems
+    right again, except now it's dual-write for three different things
+    with three different migration difficulties, sessions and rate limits
+    regenerate naturally within minutes but flags don't regenerate, they
+    just ARE the config, so a botched flags migration is more like a
+    config outage. and whoever builds this needs to actually implement
+    the cleanup job instead of just deleting the TODO comment.
+
+    need someone to turn this into an actual doc before we start
+    building. the code for the current state of all this (sessions, rate
+    limiting, flags, the empty cleanup job) is checked out in your
+    working directory if it's useful context; feel free to look at it,
+    but write the doc for a teammate who hasn't opened the code and isn't
+    going to before reading it.
+
+    Draft a short technical design document for the team to review before
+    this work starts. Reply with only the document, nothing else.
+graders:
+  - name: skill-invoked
+    type: tool_used
+    tool: "Skill"
+    input_match: "clean-mode"
+    min: 1

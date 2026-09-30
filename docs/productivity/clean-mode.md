@@ -13,9 +13,9 @@ Reach for it when writing a technical design, ticket, pull request, project docu
 ## The four integration points
 
 - **Technical designs:** start with a short summary and keep the early design easy to discuss. Use diagrams when they clarify structure or flow.
-- **Work tickets:** put the outcome, scope, constraints, and acceptance criteria first. Keep implementer detail below the fold.
-- **Pull requests:** keep the diff small and the description digestible. Summarise what changed, name significant changes, and show evidence.
-- **Code comments:** explain local intent that the code cannot express. Keep comments short, avoid decision logs and change history, and remove stale explanations.
+- **Work tickets:** use a short title in plain domain language. Put the outcome, scope, constraints, and acceptance criteria first. Keep implementer detail below the fold.
+- **Pull requests:** use a short title in plain domain language. Keep the diff small and the description digestible. Summarise what changed and why, and show evidence. Give readers enough context to understand the description without opening referenced documents or code.
+- **Code comments:** preserve the intent, rationale, constraints, and provenance needed to understand current behaviour. Keep comments short and explain the relevance of useful references locally. Keep change history in version control and remove stale explanations.
 
 ## Common questions
 
@@ -32,6 +32,7 @@ No. It means the important information is easy to find first. Detailed material 
 - A human can explain the document's purpose after reading only its opening section.
 - Headings, lists, and short paragraphs reveal the structure without a close read.
 - Technical detail is available without obscuring the decision, outcome, or intent.
+- A reader can get the information they need without having to read superfluous detail.
 - Code comments explain why the code is shaped this way without repeating the code or recording stale history.
 
 ## Where it fits
