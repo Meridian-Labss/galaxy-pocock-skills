@@ -2,3 +2,4 @@ node_modules
 .claude
 evals/results
 evals/.venv
+__pycache__

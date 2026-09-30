@@ -6,15 +6,21 @@
     python3 evals/score_with_jev.py
 
 Runs `claude plugin eval` for the given case glob (default: every clean-mode
-case), then scores each captured with/without output on three dimensions
-taken from clean-mode's own general principles: whether the opening states
-the outcome before implementation detail, whether it scans (short
-paragraphs/lists), and whether implementation detail is kept separate from
-the summary. Use --from to re-score an existing `claude plugin eval --json`
-result instead of running a new eval.
+case), then scores each captured with/without output on dimensions taken
+from clean-mode's own general principles: whether the opening states the
+outcome before implementation detail, whether it scans (short paragraphs,
+lists for parallel items, proportionate headings), whether implementation
+detail is kept separate from the summary, and whether it's padded with
+hedging or restatement. The questions themselves (instructions plus ordered
+criteria levels) live in dimensions.json next to this script - edit that
+file to change what gets measured. The response text is read directly from each run's
+trace, not from a grader - the cases carry no LLM graders, so this is the
+only scoring in play; Jev is the sole judge. Use --from to re-score an
+existing `claude plugin eval --json` result instead of running a new eval.
 """
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -26,65 +32,29 @@ try:
 except ImportError:
     sys.exit("typesafe-sdk is not installed. Run: pip install typesafe-sdk")
 
+# The questions live in dimensions.json next to this script: one entry per
+# Jev Score question (instructions + ordered worst-to-best criteria levels),
+# plus which factors compose "scannability" and which dimensions the report
+# shows. Scannability isn't one snap judgment - it depends on independent
+# factors, so each gets its own atomic question per Jev's guidance, combined
+# in code by score_texts(). The composite is the MEAN of its factors: a min()
+# was tried first and collapsed the composite to section_scannability alone
+# (uniformly the lowest factor for both arms), masking the other factors.
+DIMENSIONS_FILE = Path(__file__).with_name("dimensions.json")
+_config = json.loads(DIMENSIONS_FILE.read_text())
+
 DIMENSIONS = {
-    "outcome_first": Score(
-        instructions=(
-            "Does the document's opening (before any implementation or technical "
-            "detail) state the outcome, decision, or summary of the work?"
-        ),
-        criteria=[
-            "The opening is implementation detail, technical steps, or raw notes; the outcome/summary is buried or absent",
-            "The opening mixes some outcome/summary language with implementation detail",
-            "The opening is a clear, short outcome/summary, with implementation detail appearing only afterward",
-        ],
-    ),
-    "scannability": Score(
-        instructions=(
-            "Is the document's structure matched to its content, at the level of "
-            "individual sections, not just the document as a whole? Headings alone do "
-            "not make a document scannable: a section can sit under a clear heading and "
-            "still be a dense, multi-sentence paragraph of reasoning that a reader must "
-            "read in full to follow. Check every section's body, not only whether "
-            "headings exist. Also judge the other two ways structure can mismatch "
-            "content: genuinely parallel items left as prose instead of a list, and "
-            "content chopped into more headers or single-item sections than it "
-            "warrants, forcing the reader to track many small fragments instead of a "
-            "few clear groupings."
-        ),
-        criteria=[
-            "One or more sections (regardless of how many headings the document has) are dense, multi-sentence paragraphs of reasoning or explanation that a reader must read in full to get the point; or the whole document is undifferentiated prose with no headings or lists for parallel items",
-            "Most sections are scannable, but at least one section is a dense paragraph the reader must read in full, or genuinely parallel items are left as prose instead of a list, or unrelated remarks are split into their own headers when they could be grouped",
-            "Every section is itself scannable: short paragraphs throughout (including inside sections that explain reasoning or trade-offs), a bullet or numbered list for any set of genuinely parallel items, and related points grouped under a shared heading rather than each given its own fragment; scanning headings, first sentences, and lists alone conveys everything important, anywhere in the document",
-        ],
-    ),
-    "detail_separated": Score(
-        instructions=(
-            "Is detailed implementation/technical reference (specific code identifiers, "
-            "file paths, endpoint shapes, step-by-step technical mechanics) kept separate "
-            "from and below the summary, rather than interleaved with it?"
-        ),
-        criteria=[
-            "Implementation detail is interleaved throughout, including in the opening summary",
-            "Implementation detail is mostly separate, but some leaks into the summary or is not clearly demarcated",
-            "Implementation detail is clearly separated into its own section(s), distinct from the summary",
-        ],
-    ),
-    "conciseness": Score(
-        instructions=(
-            "Does the document say each point once and stop, or does it pad points out "
-            "with hedging, throat-clearing, self-congratulatory comparisons, or sentences "
-            "that only restate something already said? Examples of the padding to look "
-            "for: 'worth noting', 'one correction to the sketch', 'this is not X, it's Y' "
-            "framing before the actual point, narrating the document's own reasoning "
-            "process, or a second sentence that just rephrases the first."
-        ),
-        criteria=[
-            "Frequent padding: many points are wrapped in hedging, throat-clearing, or restated more than once",
-            "Some padding: a few points carry unnecessary hedging or restatement, but most of the document is direct",
-            "Every point is stated once, directly, with no hedging, throat-clearing, or restatement",
-        ],
-    ),
+    name: Score(instructions=d["instructions"], criteria=d["criteria"])
+    for name, d in _config["dimensions"].items()
 }
+SCANNABILITY_FACTORS = tuple(_config["scannability_factors"])
+REPORT_DIMENSIONS = list(_config["report_dimensions"])
+
+# Dimensions may use different numbers of criteria levels, so a raw score of
+# 2 means "top" on a 3-level scale but "middle" on a 5-level one. The
+# composite normalises each factor by its own top level, then rescales to
+# 0-2 so it reads like the other report dimensions.
+DIMENSION_TOP = {name: len(d["criteria"]) - 1 for name, d in _config["dimensions"].items()}
 
 
 def run_eval(case_glob, runs, plugin_root):
@@ -93,10 +63,16 @@ def run_eval(case_glob, runs, plugin_root):
         "claude", "plugin", "eval", str(plugin_root),
         "--case", case_glob,
         "--runs", str(runs),
-        "--trust-plugin", "--no-publish", "--scaffold",
+        "--trust-plugin", "--no-publish", "--scaffold", "--keep-temp",
         "--json", str(out_path),
     ]
-    result = subprocess.run(cmd)
+    try:
+        result = subprocess.run(cmd)
+    except KeyboardInterrupt:
+        # claude plugin eval catches the same Ctrl-C and finishes up on its
+        # own; give it a moment, then clean whatever sandboxes it kept for us.
+        _cleanup_partial(out_path)
+        sys.exit(130)
     if result.returncode not in (0, 1):
         # 1 means a case scored below --threshold, which is expected here:
         # the whole point is comparing a lower-scoring "without" arm.
@@ -104,15 +80,68 @@ def run_eval(case_glob, runs, plugin_root):
     return json.loads(out_path.read_text())
 
 
+def _cleanup_partial(out_path):
+    """After an interrupt, sweep the kept sandboxes of any runs that finished."""
+    try:
+        partial = json.loads(out_path.read_text())
+        _, kept_dirs = extract_texts(partial)
+        cleanup_kept_dirs(kept_dirs)
+        print("interrupted - cleaned up completed runs' sandboxes", file=sys.stderr)
+    except (OSError, ValueError, KeyError):
+        print(
+            "interrupted - if the log shows kept /private/tmp/e-* directories, "
+            "remove them by hand (chmod -R u+rwx then rm -rf)",
+            file=sys.stderr,
+        )
+
+
+def last_assistant_text(trace_path):
+    """Final assistant reply from a claude plugin eval trace.jsonl, independent
+    of any grader - so cases need no LLM grader just to capture the response."""
+    text = None
+    for line in Path(trace_path).read_text().splitlines():
+        event = json.loads(line)
+        if event.get("type") != "assistant":
+            continue
+        blocks = event.get("message", {}).get("content", [])
+        chunks = [b["text"] for b in blocks if isinstance(b, dict) and b.get("type") == "text"]
+        if chunks:
+            text = "\n".join(chunks)
+    return text
+
+
+def kept_dir_for(trace_path):
+    # tracePath looks like /private/tmp/e-XXXXXX/out/trace.jsonl
+    return Path(trace_path).parent.parent
+
+
 def extract_texts(result):
     texts = {}
+    kept_dirs = []
     for case in result["cases"]:
         for arm in ("with", "without"):
             for i, run in enumerate(case.get("arms", {}).get(arm, [])):
-                text = next((g["evidence"] for g in run["graders"] if g.get("evidence")), None)
+                trace_path = run.get("tracePath")
+                text = None
+                if trace_path and Path(trace_path).exists():
+                    text = last_assistant_text(trace_path)
+                    kept_dirs.append(kept_dir_for(trace_path))
+                if text is None:
+                    # Fall back to an LLM grader's captured evidence, for
+                    # --from results produced before this script kept its
+                    # own traces (or by a case that still has an llm grader).
+                    text = next((g["evidence"] for g in run["graders"] if g.get("evidence")), None)
                 if text is not None:
                     texts[f"{case['name']}__{arm}__{i}"] = text
-    return texts
+    return texts, kept_dirs
+
+
+def cleanup_kept_dirs(kept_dirs):
+    for d in kept_dirs:
+        if not d.exists():
+            continue
+        subprocess.run(["chmod", "-R", "u+rwx", str(d)], check=False)
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def score_texts(texts):
@@ -120,10 +149,17 @@ def score_texts(texts):
     with TypeSafeClient() as client:
         for key, text in texts.items():
             response = client.system_one(state=text, questions=DIMENSIONS)
-            scored[key] = {
+            raw = {
                 qid: {"score": ans.score, "confidence": ans.confidence}
                 for qid, ans in response.answers.items()
             }
+            normalised = [raw[f]["score"] / DIMENSION_TOP[f] for f in SCANNABILITY_FACTORS]
+            factor_confidences = [raw[f]["confidence"] for f in SCANNABILITY_FACTORS]
+            raw["scannability"] = {
+                "score": 2 * sum(normalised) / len(normalised),
+                "confidence": sum(factor_confidences) / len(factor_confidences),
+            }
+            scored[key] = raw
     return scored
 
 
@@ -148,11 +184,15 @@ def print_report(scored):
         runs_by_arm = grouped[case]
         for arm in ("with", "without"):
             for dims in runs_by_arm[arm]:
-                vals = ", ".join(f"{d}={v['score']:.2f}" for d, v in dims.items())
+                vals = ", ".join(f"{d}={dims[d]['score']:.2f}" for d in REPORT_DIMENSIONS)
                 print(f"  {arm:8s} {vals}")
-        for dim in DIMENSIONS:
+        for dim in REPORT_DIMENSIONS:
             w, wo = average(runs_by_arm, "with", dim), average(runs_by_arm, "without", dim)
             print(f"    delta {dim}: {w - wo:+.2f}")
+            if dim == "scannability":
+                for factor in SCANNABILITY_FACTORS:
+                    fw, fwo = average(runs_by_arm, "with", factor), average(runs_by_arm, "without", factor)
+                    print(f"      . {factor}: {fw - fwo:+.2f} (with {fw:.2f}, without {fwo:.2f})")
         print()
 
 
@@ -176,9 +216,13 @@ def write_markdown_report(scored, texts, plugin_root, case_glob):
         lines.append("")
         lines.append("| Dimension | With | Without | Delta |")
         lines.append("|---|---|---|---|")
-        for dim in DIMENSIONS:
+        for dim in REPORT_DIMENSIONS:
             w, wo = average(runs_by_arm, "with", dim), average(runs_by_arm, "without", dim)
             lines.append(f"| {dim} | {w:.2f} | {wo:.2f} | {w - wo:+.2f} |")
+            if dim == "scannability":
+                for factor in SCANNABILITY_FACTORS:
+                    fw, fwo = average(runs_by_arm, "with", factor), average(runs_by_arm, "without", factor)
+                    lines.append(f"| &nbsp;&nbsp;· {factor} | {fw:.2f} | {fwo:.2f} | {fw - fwo:+.2f} |")
         lines.append("")
         for arm in ("with", "without"):
             arm_texts = [texts[k] for k in texts if k.startswith(f"{case}__{arm}__")]
@@ -209,7 +253,8 @@ def main():
 
     result = json.loads(Path(args.from_json).read_text()) if args.from_json else run_eval(args.case, args.runs, args.plugin_root)
 
-    texts = extract_texts(result)
+    texts, kept_dirs = extract_texts(result)
+    cleanup_kept_dirs(kept_dirs)
     if not texts:
         sys.exit("no last_message text found in eval result")
 
@@ -225,4 +270,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit(130)

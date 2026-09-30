@@ -2,6 +2,7 @@
 name: clean-mode-ticket
 runs: 3
 max_turns: 8
+model: claude-sonnet-5
 allowed_tools: [Skill]
 ---
 

@@ -1,0 +1,74 @@
+{
+  "dimensions": {
+    "outcome_first": {
+      "instructions": "How much does the document's opening lead with the outcome, decision, or summary of the proposed work, rather than implementation or technical detail? This assesses only the opening: the title and the text up to the end of the first section. Later sections are not judged here.",
+      "criteria": [
+        "The opening is entirely implementation detail, technical steps, or raw notes, with no sentence stating the outcome or summary",
+        "The opening interleaves outcome/summary language with implementation detail",
+        "The opening is a short outcome/summary statement, and implementation detail appears only in later sections"
+      ]
+    },
+    "section_scannability": {
+      "instructions": "Scanning means getting the meaning by moving the eyes down the page rather than reading every line left to right. Within each individual section of the document, how much of the section's meaning can a reader get by scanning its body? Short paragraphs and short list items can be scanned; a dense multi-sentence block forces line-by-line reading, and a list item that runs several sentences is such a block even though it sits behind a bullet. This assesses section bodies, not the presence of headings: a section sitting under a clear heading can still be one dense paragraph of reasoning.",
+      "criteria": [
+        "One section of dense text structured purely via punctuation. A reader must read every line, skipping padding and fluff, to get the point",
+        "Most sections are single dense paragraphs of several sentences that a reader has to read in full to extract their point",
+        "Most sections are short paragraphs or lists, and one or a few sections are dense multi-sentence paragraphs a reader has to read in full",
+        "Every section, including ones that explain reasoning or trade-offs, is written as short paragraphs or lists rather than a single dense block",
+        "Every section is written as dot points or numbered lists, with no dense multi-sentence paragraphs"
+      ]
+    },
+    "parallel_items_listed": {
+      "instructions": "A bullet or numbered list lets a reader take in parallel points by moving the eyes down the page; prose forces left-to-right reading of each. Where the document presents a set of parallel points - two or more items with the same role, such as risks, options, open questions, review notes, or an enumeration of names or fields - how consistently is each such set formatted as an actual bullet or numbered list? Two disguises do not count as a list: a paragraph per point (even when each opens with a bold label), and a run of several comma- or semicolon-delimited items inside one sentence - including when that sentence is itself a bullet, where a nested sub-list is the correct form.",
+      "criteria": [
+        "None of the document's sets of parallel points are written as a bullet or numbered list; each is a run of separate prose paragraphs or a delimited enumeration inside a sentence",
+        "Some sets of parallel points are written as a bullet or numbered list, and at least one set is written as separate prose paragraphs or as a run of several delimited items inside a sentence",
+        "Every set of more than one parallel point is written as a bullet or numbered list, or the document contains no sets of parallel points"
+      ]
+    },
+    "heading_clarity": {
+      "instructions": "Headings are what a reader lands on when moving the eyes down the page, so a heading has to convey what its section holds without the section being read. How well do the document's title and section headings, each read on its own, tell a reader what their section contains? A heading fails this by being a generic label ('Details', 'Notes'), jargon or a code identifier, or a metaphor or mood ('a quiet hole', 'visible pain') in place of the concrete point ('rate limits reset on every deploy'). This assesses only actual heading lines (the title and markdown headings). Bold lead-ins on paragraphs or list items are not headings and are judged elsewhere, as are section bodies and the number of headings.",
+      "criteria": [
+        "Most heading lines are generic labels, jargon, code identifiers, or metaphors that do not state what their section contains",
+        "Most heading lines state what their section contains, and one or a few are generic labels, jargon, code identifiers, or metaphors a reader cannot interpret without reading the section",
+        "Every heading line, read on its own, states its section's concrete point in plain language"
+      ]
+    },
+    "plain_language": {
+      "instructions": "How much of the document's prose is written in plain, familiar language a teammate can follow without looking anything up? Language that requires lookup means jargon, arcane or niche technical terms, unexpanded acronyms, and code identifiers or file paths used as ordinary vocabulary in a sentence. Judge the prose written for a general reader - the summary, problem statements, decisions, and rationale. Identifiers inside a dedicated implementation-detail section are judged elsewhere, as are headings.",
+      "criteria": [
+        "Much of the general-reader prose relies on jargon, unexpanded acronyms, or code identifiers, so a teammate has to look things up or open the code to follow the point",
+        "The general-reader prose is mostly plain language, and a few sentences rely on jargon, an unexpanded acronym, or a code identifier a teammate would have to look up",
+        "All of the general-reader prose reads in plain, familiar language; any necessary technical term is explained where it first appears"
+      ]
+    },
+    "detail_separated": {
+      "instructions": "How well is implementation-level reference confined to dedicated sections below the summary, rather than appearing in the summary or interleaved through other sections? Implementation-level reference means specific code identifiers, file paths, endpoint shapes, and step-by-step technical mechanics.",
+      "criteria": [
+        "Implementation detail appears throughout the document, including in the opening summary",
+        "Implementation detail mostly appears outside the summary, and some also appears within it or without a clear section boundary",
+        "Implementation detail appears only in its own dedicated section(s), separate from the summary"
+      ]
+    },
+    "conciseness": {
+      "instructions": "How free is the document's wording of padding around its points? Padding means: hedging phrases ('worth noting'), throat-clearing lead-ins before the actual point ('one correction to the sketch', 'this is not X, it's Y'), narration of the document's own reasoning process, self-congratulatory comparisons, and sentences that restate a point already made. This assesses the wording around each point, not how many points the document makes - a thorough document can still be free of padding.",
+      "criteria": [
+        "Most points are followed by a hedging phrase, a throat-clearing lead-in, or a sentence that restates the same point again",
+        "A few points are followed by a hedging phrase, a throat-clearing lead-in, or a restatement, and most points are stated once",
+        "Every point is stated once, with no hedging phrase, throat-clearing lead-in, or restatement"
+      ]
+    }
+  },
+  "scannability_factors": [
+    "section_scannability",
+    "parallel_items_listed",
+    "heading_clarity"
+  ],
+  "report_dimensions": [
+    "outcome_first",
+    "scannability",
+    "plain_language",
+    "detail_separated",
+    "conciseness"
+  ]
+}

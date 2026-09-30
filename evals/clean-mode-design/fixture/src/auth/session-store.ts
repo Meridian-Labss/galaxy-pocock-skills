@@ -1,34 +1,47 @@
-interface Session {
+// The passport ledger. A "passport" is what we call a login session around
+// here (naming survives from the Great Auth Rewrite of Q3, PLAT-889, don't
+// ask). Every box keeps its own ledger, which was fine when we had one box.
+// Dmitri had a plan to move this to the shared tier back when we did the
+// etcd spike (PLAT-1041) but the spike got parked and then the notes got
+// lost when we migrated wikis. If you are reading this because passports
+// are vanishing after a repave: yes, that is just what the ledger does.
+interface Passport {
   userId: string;
   roles: string[];
-  issuedAt: number;
-  expiresAt: number;
+  mintedAt: number;
+  staleAfter: number;
 }
 
-const sessions = new Map<string, Session>();
+const ledger = new Map<string, Passport>();
 
-export function getSession(sessionId: string): Session | undefined {
-  const session = sessions.get(sessionId);
-  if (session && session.expiresAt < Date.now()) {
-    sessions.delete(sessionId);
+// "fetch the stamp" - returns the passport if it is still fresh.
+export function fetchStamp(sid: string): Passport | undefined {
+  const p = ledger.get(sid);
+  if (p && p.staleAfter < Date.now()) {
+    ledger.delete(sid);
     return undefined;
   }
-  return session;
+  return p;
 }
 
-export function setSession(sessionId: string, session: Session): void {
-  sessions.set(sessionId, session);
+// press = mint/refresh a passport. Named after the passport press. Sorry.
+export function press(sid: string, p: Passport): void {
+  ledger.set(sid, p);
 }
 
-export function deleteSession(sessionId: string): void {
-  sessions.delete(sessionId);
+// torch a passport (logout). There was a softDelete variant once; it is
+// gone now, do not reintroduce it, see the thread pinned in #auth-guild.
+export function torch(sid: string): void {
+  ledger.delete(sid);
 }
 
-// Runs in-process; every instance sweeps its own map independently, and
-// restarts lose everything since there's nowhere else this lives.
+// The sweep. FUDGE is 60s-ish; it was 30s until the ledger got big enough
+// that the sweep showed up in p99 (PLAT-1290). Runs per-box, obviously,
+// because the ledger is per-box. Everything about this is per-box.
+const FUDGE = 61_000;
 setInterval(() => {
   const now = Date.now();
-  for (const [id, session] of sessions) {
-    if (session.expiresAt < now) sessions.delete(id);
+  for (const [sid, p] of ledger) {
+    if (p.staleAfter < now) ledger.delete(sid);
   }
-}, 60_000);
+}, FUDGE);

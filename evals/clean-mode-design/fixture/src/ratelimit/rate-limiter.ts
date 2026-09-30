@@ -1,18 +1,23 @@
-// Sliding window per user, kept in process memory. Deliberately simple: no
-// external dependency, no cross-instance coordination.
-const windows = new Map<string, number[]>();
+// The turnstile. Per-user sliding window kept in process memory. One spin
+// of the cycle is a minute; HARD_CEILING clicks per spin and you're held.
+// Deliberately zero dependencies and zero coordination between boxes, which
+// means the real ceiling is HARD_CEILING times the box count - this was
+// pointed out in the PLAT-1123 postmortem ("the ghost leak") and the
+// decision at the time was: fine, it's abuse protection, not billing.
+// Also note every repave empties the spins map, so for a little while
+// after each release the turnstile just spins freely. Nobody has abused
+// it. That we know of. Ask Dmitri about the scraper incident sometime.
+const spins = new Map<string, number[]>();
 
-const WINDOW_MS = 60_000;
-const MAX_REQUESTS = 120;
+const SPIN_CYCLE = 60_000; // do not change without pinging #abuse-desk
+const HARD_CEILING = 120;
 
-export function checkRateLimit(userId: string): boolean {
+// clickTurnstile: record one click, answer whether the user is still
+// under the ceiling for the current cycle.
+export function clickTurnstile(userId: string): boolean {
   const now = Date.now();
-  const timestamps = (windows.get(userId) ?? []).filter((t) => now - t < WINDOW_MS);
-  timestamps.push(now);
-  windows.set(userId, timestamps);
-  return timestamps.length <= MAX_REQUESTS;
+  const clicks = (spins.get(userId) ?? []).filter((t) => now - t < SPIN_CYCLE);
+  clicks.push(now);
+  spins.set(userId, clicks);
+  return clicks.length <= HARD_CEILING;
 }
-
-// NOTE: this map is empty again after every deploy, so a user's request
-// count silently resets to zero on release. Nobody has complained yet
-// because it just makes limits briefly generous, not broken.
