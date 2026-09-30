@@ -1,12 +1,12 @@
 ## What it does
 
-`clean-mode` is the writing standard for durable human-facing project artefacts. It makes technical designs, work tickets, pull requests, documentation, and code comments easy to speed-read and discuss with minimal context.
+`clean-mode` is the writing standard for durable human-facing project artifacts. It makes technical designs, work tickets, pull requests, documentation, and code comments easy to speed-read and discuss with minimal context.
 
-Its defining constraint is that the important information must be understandable from the top of the artefact. Detail still belongs in the project, but it moves below the fold or into a separate reference when it would slow the first read.
+Its defining constraint is that the important information must be understandable from the top of the artifact. Detail still belongs in the project, but it moves below the fold or into a separate reference when it would slow the first read.
 
 ## When to reach for it
 
-Type `/clean-mode`, or the agent reaches for it automatically when a task creates or edits a durable human-facing artefact.
+Type `/clean-mode`, or the agent reaches for it automatically when a task creates or edits a durable human-facing artifact.
 
 Reach for it when writing a technical design, ticket, pull request, project document, or code comment. It is a default writing standard, not a format-specific template.
 
@@ -21,7 +21,7 @@ Reach for it when writing a technical design, ticket, pull request, project docu
 
 **Does clean mode apply to agent narration?**
 
-No. It applies to durable project artefacts. Conversation can remain conversational; the project record should remain easy for humans to inspect later.
+No. It applies to durable project artifacts. Conversation can remain conversational; the project record should remain easy for humans to inspect later.
 
 **Does clean mode mean every document must be short?**
 
@@ -37,4 +37,4 @@ No. It means the important information is easy to find first. Detailed material 
 
 ## Where it fits
 
-This is a model-invoked writing standard used by the technical-design, ticket, implementation, and review flows. Use [writing-for-agents](https://aihero.dev/skills-writing-for-agents) for documents whose primary reader is an agent; use clean mode when humans need to inspect the durable artefact. [ask-matt](https://aihero.dev/skills-ask-matt) routes the broader workflow.
+This is a model-invoked writing standard used by the technical-design, ticket, implementation, and review flows. Use [writing-for-agents](https://aihero.dev/skills-writing-for-agents) for documents whose primary reader is an agent; use clean mode when humans need to inspect the durable artifact. [ask-matt](https://aihero.dev/skills-ask-matt) routes the broader workflow.

@@ -1,9 +1,9 @@
 ---
 name: clean-mode
-description: Use clean mode when creating or editing durable human-facing project artefacts, including technical designs, work tickets, pull requests, documentation, and code comments. Put important information first and make the result easy to speed-read and discuss.
+description: Use clean mode when creating or editing durable human-facing project artifacts, including technical designs, work tickets, pull requests, documentation, and code comments. Put important information first and make the result easy to speed-read and discuss.
 ---
 
-Clean mode is the default for durable human-facing project artefacts. Write so a human can speed-read and understand the important information with minimal context.
+Clean mode is the default for durable human-facing project artifacts. Write so a human can speed-read and understand the important information with minimal context.
 
 ## General principles
 
@@ -91,7 +91,7 @@ Code comments are human integration points where people understand the intent of
 
 ## Completion check
 
-Before finishing a durable human-facing artefact, check:
+Before finishing a durable human-facing artifact, check:
 
 - Can a human understand the important point from the top of the document?
 - Can they find the section they need by scanning headings and lists?
