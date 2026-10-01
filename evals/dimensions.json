@@ -1,74 +1,136 @@
 {
+  "state": {
+    "document_only": "{document}",
+    "with_source": "# SOURCE\n\nThe raw material the document was written from. It is reference only. Never judge the writing of this section; it is deliberately unedited.\n\n{source}\n\n# DOCUMENT\n\nThe finished document under evaluation.\n\n{document}\n"
+  },
   "dimensions": {
-    "outcome_first": {
-      "instructions": "How much does the document's opening lead with the outcome, decision, or summary of the proposed work, rather than implementation or technical detail? This assesses only the opening: the title and the text up to the end of the first section. Later sections are not judged here.",
+    "core_info_first": {
+      "state": "document_only",
+      "instructions": "Judge only the document's opening: the text from the start of the body to the end of the first section. The title is judged by another question and is not judged here; so are all later sections. Does the opening state the outcome, decision, or effect of the work in the reader's terms before it explains cause, background, mechanism, or implementation? Outcome language names what is true for a reader or user ('invoice due dates show a day early for customers behind UTC', 'customers can download their invoices as a CSV'). Cause and mechanism language names how the system is built or why it behaves that way ('the formatter uses local-timezone getters', 'session state lives in a per-process in-memory map'). A metadata block (status, author, date, priority) is not a statement of outcome.",
       "criteria": [
-        "The opening is entirely implementation detail, technical steps, or raw notes, with no sentence stating the outcome or summary",
-        "The opening interleaves outcome/summary language with implementation detail",
-        "The opening is a short outcome/summary statement, and implementation detail appears only in later sections"
+        "The opening never states the outcome, decision, or effect. It is entirely cause, background, mechanism, implementation detail, metadata, or raw notes.",
+        "The opening states the outcome, decision, or effect only after first explaining cause, background, or mechanism.",
+        "The opening leads with the outcome, decision, or effect, then mixes further cause, mechanism, or implementation detail into the same opening.",
+        "The opening leads with the outcome, decision, or effect and states it in full, leaving cause, mechanism, and implementation detail to later sections."
       ]
     },
-    "section_scannability": {
-      "instructions": "Scanning means getting the meaning by moving the eyes down the page rather than reading every line left to right. Within each individual section of the document, how much of the section's meaning can a reader get by scanning its body? Short paragraphs and short list items can be scanned; a dense multi-sentence block forces line-by-line reading, and a list item that runs several sentences is such a block even though it sits behind a bullet. This assesses section bodies, not the presence of headings: a section sitting under a clear heading can still be one dense paragraph of reasoning.",
+    "title_names_the_outcome": {
+      "state": "document_only",
+      "instructions": "Judge only the document's title: the top-level heading, or if there is none, the first line that functions as the title. Nothing else in the document is judged here. A reader scanning a list of titles should be able to tell what this one is about and what it achieves. A title fails by naming a function, variable, file, or other code identifier; by leading with a document-category label that stands in for the subject ('Design Doc:', 'Title', 'Ticket:'); by using jargon or an unexpanded acronym; or by naming the component or mechanism that changed rather than the effect of changing it. A short verb-first framing such as 'Fix' or 'Add' followed by the plain effect is fine and is not a category label.",
       "criteria": [
-        "One section of dense text structured purely via punctuation. A reader must read every line, skipping padding and fluff, to get the point",
-        "Most sections are single dense paragraphs of several sentences that a reader has to read in full to extract their point",
-        "Most sections are short paragraphs or lists, and one or a few sections are dense multi-sentence paragraphs a reader has to read in full",
-        "Every section, including ones that explain reasoning or trade-offs, is written as short paragraphs or lists rather than a single dense block",
-        "Every section is written as dot points or numbered lists, with no dense multi-sentence paragraphs"
+        "There is no title, or the title is only a document-category label, a bare component name, or a bare file or identifier name.",
+        "The title names the component, mechanism, or code identifier that changed and leaves the reader to infer the effect.",
+        "The title names the effect, but carries a code identifier, an unexpanded acronym, jargon, or a document-category prefix alongside it.",
+        "The title names the effect of the work in plain domain language, with no code identifier, acronym, jargon, or category prefix."
+      ]
+    },
+    "blocks_kept_short": {
+      "state": "document_only",
+      "instructions": "The standard is that no paragraph and no list item runs longer than three sentences. Anything longer should have been split into a subheading plus body, or into separate items. Count every paragraph and every bullet or numbered item in the document, wherever it sits. A single sentence that chains several independent clauses into a block of comparable length counts as over-length. Code blocks, tables, and headings are not counted. This question is only about block length; whether the blocks are introduced by headings, bold labels, or bullets is judged elsewhere.",
+      "criteria": [
+        "More than a quarter of the document's paragraphs and list items run longer than three sentences.",
+        "Four or more paragraphs or list items run longer than three sentences, but most do not.",
+        "One to three paragraphs or list items run longer than three sentences.",
+        "No paragraph or list item in the document runs longer than three sentences."
       ]
     },
     "parallel_items_listed": {
-      "instructions": "A bullet or numbered list lets a reader take in parallel points by moving the eyes down the page; prose forces left-to-right reading of each. Where the document presents a set of parallel points - two or more items with the same role, such as risks, options, open questions, review notes, or an enumeration of names or fields - how consistently is each such set formatted as an actual bullet or numbered list? Two disguises do not count as a list: a paragraph per point (even when each opens with a bold label), and a run of several comma- or semicolon-delimited items inside one sentence - including when that sentence is itself a bullet, where a nested sub-list is the correct form.",
+      "state": "document_only",
+      "instructions": "A bullet or numbered list lets a reader take in parallel points by moving the eyes down the page; prose forces left-to-right reading of each. Where the document presents a set of parallel points, meaning two or more items with the same role such as risks, options, open questions, review notes, acceptance criteria, or an enumeration of names or fields, how consistently is each such set written as an actual bullet or numbered list? Two disguises do not count as a list: a run of separate prose paragraphs, one per point, and a run of four or more comma- or semicolon-delimited items inside one sentence, including when that sentence is itself a bullet, where a nested sub-list is the correct form. A markdown table counts as a list. This question is only about whether the set takes list form. A list whose items open with bold labels still counts as a list here; the bold is judged by another question.",
       "criteria": [
-        "None of the document's sets of parallel points are written as a bullet or numbered list; each is a run of separate prose paragraphs or a delimited enumeration inside a sentence",
-        "Some sets of parallel points are written as a bullet or numbered list, and at least one set is written as separate prose paragraphs or as a run of several delimited items inside a sentence",
-        "Every set of more than one parallel point is written as a bullet or numbered list, or the document contains no sets of parallel points"
+        "None of the document's sets of parallel points take list form. Each is a run of separate prose paragraphs or a delimited enumeration inside a sentence.",
+        "Fewer than half of the sets of parallel points take list form.",
+        "Most sets of parallel points take list form, and one or two are written as separate prose paragraphs or as a run of several delimited items inside a sentence.",
+        "Every set of two or more parallel points takes list form, or the document contains no set of parallel points."
       ]
     },
     "heading_clarity": {
-      "instructions": "Headings are what a reader lands on when moving the eyes down the page, so a heading has to convey what its section holds without the section being read. How well do the document's title and section headings, each read on its own, tell a reader what their section contains? A heading fails this by being a generic label ('Details', 'Notes'), jargon or a code identifier, or a metaphor or mood ('a quiet hole', 'visible pain') in place of the concrete point ('rate limits reset on every deploy'). This assesses only actual heading lines (the title and markdown headings). Bold lead-ins on paragraphs or list items are not headings and are judged elsewhere, as are section bodies and the number of headings.",
+      "state": "document_only",
+      "instructions": "Headings are what a reader lands on when moving the eyes down the page, so a heading has to convey what its section holds without the section being read. Judge the document's section headings, each read on its own. A heading fails by being a generic container label ('Details', 'Notes', 'Background', 'Summary', 'Scope'), jargon or a code identifier, a metaphor or a mood ('a quiet hole', 'visible pain'), or a question whose answer the section goes on to give. Judge only actual markdown heading lines, and exclude the title, which another question judges. Bold lead-ins on paragraphs or list items are not headings and are judged elsewhere, as are section bodies and how many headings the document has.",
       "criteria": [
-        "Most heading lines are generic labels, jargon, code identifiers, or metaphors that do not state what their section contains",
-        "Most heading lines state what their section contains, and one or a few are generic labels, jargon, code identifiers, or metaphors a reader cannot interpret without reading the section",
-        "Every heading line, read on its own, states its section's concrete point in plain language"
+        "Most heading lines are generic container labels, jargon, code identifiers, metaphors, or questions, and do not state what their section holds.",
+        "Roughly half the heading lines state their section's point; the rest are generic labels, jargon, code identifiers, metaphors, or questions.",
+        "Most heading lines state their section's point, and one or two are generic labels, jargon, code identifiers, metaphors, or questions.",
+        "Every heading line, read on its own, states its section's concrete point in plain language."
+      ]
+    },
+    "structure_not_bolded": {
+      "state": "document_only",
+      "instructions": "The standard is that bold text never marks structure. Structure means a label that introduces a block of content rather than sitting inside a sentence: a bold lead-in on a paragraph or list item ('**Sessions:** every deploy wipes the map...'), a bold field label in a metadata block ('**Status:** Draft', '**Priority:** Medium', '**Author:**'), or a bold line standing in for a heading. A block introduced this way should have been a subheading with the sentences under it, or a plain bullet if it is one line. Bold used inside a sentence to emphasize a word or phrase ('the server must **not** trust a client-supplied id') is emphasis, not structure, and does not count. Markdown table header cells do not count. Count every bold run that marks structure.",
+      "criteria": [
+        "The document's structure rests on bold labels: six or more bold structural labels, or whole sections built out of them instead of headings and plain bullets.",
+        "Three to five bold structural labels appear.",
+        "One or two bold structural labels appear.",
+        "No bold text marks structure anywhere. Every block is introduced by a heading or stands as a plain bullet."
       ]
     },
     "plain_language": {
-      "instructions": "How much of the document's prose is written in plain, familiar language a teammate can follow without looking anything up? Language that requires lookup means jargon, arcane or niche technical terms, unexpanded acronyms, and code identifiers or file paths used as ordinary vocabulary in a sentence. Judge the prose written for a general reader - the summary, problem statements, decisions, and rationale. Identifiers inside a dedicated implementation-detail section are judged elsewhere, as are headings.",
+      "state": "document_only",
+      "instructions": "How much of the document's prose reads in plain, familiar language a teammate can follow without looking anything up? Language that needs a lookup means: an in-house nickname or code name used as an ordinary noun ('the zamboni sweeps the queue'); a function, variable, constant, or file name used as the subject or object of a sentence ('formatDueDate used local-timezone math'); an unexpanded acronym; a ticket or incident number standing in for the fact it refers to ('see the incident-118 postmortem for details'); and niche jargon. Three things are acceptable and must not be penalized: a code name mapped once in passing while the plain term carries the sentence; a ticket or incident reference in parentheses after the fact has already been stated in plain words; and a necessary technical term explained in a clause where it first appears. Judge prose written for a general reader. Ignore the title and headings, which other questions judge, and ignore identifiers inside code blocks.",
       "criteria": [
-        "Much of the general-reader prose relies on jargon, unexpanded acronyms, or code identifiers, so a teammate has to look things up or open the code to follow the point",
-        "The general-reader prose is mostly plain language, and a few sentences rely on jargon, an unexpanded acronym, or a code identifier a teammate would have to look up",
-        "All of the general-reader prose reads in plain, familiar language; any necessary technical term is explained where it first appears"
+        "Much of the general-reader prose turns on code names, identifiers, acronyms, or bare ticket references, so a teammate has to open the code or the tickets to follow the point.",
+        "Several sentences turn on a code name, identifier, acronym, or bare ticket reference that a teammate would have to look up.",
+        "One or two sentences turn on such a term; the rest reads in plain language, and necessary technical terms are explained where they first appear.",
+        "Every sentence reads in plain, familiar language. Code names appear only mapped once alongside the plain term, references only in parentheses after the fact they support, and necessary technical terms are explained where they first appear."
       ]
     },
-    "detail_separated": {
-      "instructions": "How well is implementation-level reference confined to dedicated sections below the summary, rather than appearing in the summary or interleaved through other sections? Implementation-level reference means specific code identifiers, file paths, endpoint shapes, and step-by-step technical mechanics.",
+    "padding": {
+      "state": "document_only",
+      "instructions": "How free is the wording around each point of material that adds nothing? Padding means: a hedging phrase ('worth noting', 'it is worth saying'); a throat-clearing lead-in before the actual point ('one correction to the sketch', 'this is not X, it is Y'); a sentence describing the document's own structure ('This doc lays out the problem, the proposal, and the open questions'); narration of the writing or reasoning process ('flagging them here so the team can resolve them'); a self-congratulatory or comparative aside; and a sentence restating a point the document already made. Judge the wording around each point, not how many points the document makes or which points it chose to include, both of which other questions judge. A thorough document can be free of padding. Count each instance.",
       "criteria": [
-        "Implementation detail appears throughout the document, including in the opening summary",
-        "Implementation detail mostly appears outside the summary, and some also appears within it or without a clear section boundary",
-        "Implementation detail appears only in its own dedicated section(s), separate from the summary"
+        "Padding runs through the document: most sections carry a hedge, a throat-clearing lead-in, a structure-describing sentence, process narration, or a restatement.",
+        "Four or more instances of padding appear.",
+        "One to three instances of padding appear.",
+        "Every point is stated once, with no hedge, throat-clearing lead-in, structure-describing sentence, process narration, or restatement anywhere."
       ]
     },
-    "conciseness": {
-      "instructions": "How free is the document's wording of padding around its points? Padding means: hedging phrases ('worth noting'), throat-clearing lead-ins before the actual point ('one correction to the sketch', 'this is not X, it's Y'), narration of the document's own reasoning process, self-congratulatory comparisons, and sentences that restate a point already made. This assesses the wording around each point, not how many points the document makes - a thorough document can still be free of padding.",
+    "content_earns_its_place": {
+      "state": "with_source",
+      "instructions": "Judge only the DOCUMENT. Use the SOURCE only to tell which content the document invented. Of the content the document added that the source does not contain, how much of it does a reader need? Content a reader does not need: a speculative or placeholder item that defers the real answer instead of giving it ('confirm the exact column set with support', 'any row limit needed?'); a section whose content another section already covers; an invented list padded out to look complete; boilerplate the document gains nothing from (empty author or status fields, a references section repeating links already given inline); and detail at a finer grain than any reader decision depends on. Do not judge content traceable to the source, and do not judge the wording around a point; other questions cover both. Judge against the content a reader actually needs, not an absolute word count: a long document whose every added part is load-bearing scores at the top.",
       "criteria": [
-        "Most points are followed by a hedging phrase, a throat-clearing lead-in, or a sentence that restates the same point again",
-        "A few points are followed by a hedging phrase, a throat-clearing lead-in, or a restatement, and most points are stated once",
-        "Every point is stated once, with no hedging phrase, throat-clearing lead-in, or restatement"
+        "Much of what the document added is content a reader does not need: speculative or placeholder items, sections duplicating other sections, invented padding, or boilerplate.",
+        "Several invented sections or items could be cut without a reader losing anything.",
+        "One or two invented sections or items could be cut without a reader losing anything.",
+        "Everything the document added earns its place. Nothing invented could be cut without the reader losing something."
+      ]
+    },
+    "requirements_retained": {
+      "state": "with_source",
+      "instructions": "The SOURCE contains facts a reader of the DOCUMENT will need: requirements, constraints, decisions already made, open questions, named risks, acceptance conditions, numbers, and deadlines. How many of those survive into the document? A fact counts as retained if the document conveys it in any form; it does not have to use the source's words, keep its order, or match its length. Judge only load-bearing facts, meaning things a reader would act on, decide with, or be caught out by if they were missing. Do not penalize the document for adding correct information the source does not contain, for reordering, for compressing, or for leaving behind the source's asides, history, and hedges, which another question judges. Do not judge the document's writing here, only what it kept.",
+      "criteria": [
+        "Several load-bearing facts from the source are missing, including at least one a reader would be caught out by, such as a stated constraint, risk, or acceptance condition.",
+        "One load-bearing fact a reader would be caught out by is missing, or several minor ones are.",
+        "Every load-bearing fact survives, but one or two are weakened: stated vaguely, folded into another point, or stripped of the detail that made them actionable.",
+        "Every load-bearing fact from the source survives into the document, each stated clearly enough to act on."
+      ]
+    },
+    "asides_dropped": {
+      "state": "with_source",
+      "instructions": "The SOURCE carries material the reader of the DOCUMENT does not need: the writer's asides and tangents, the history of how the team got here, hedges and self-corrections, unresolved speculation about things outside this work, and chatty framing. How much of that did the document leave behind? Carrying an aside over counts even when it is reworded, compressed into a clause, or filed under a heading such as 'out of scope' or 'open questions'. The exception is an aside the document turns into something a reader must act on: a named follow-up with an owner or a next step, or an exclusion a reader would otherwise assume was included. That has been made load-bearing and does not count as carried over. Do not judge the document's writing here, only what it carried across.",
+      "criteria": [
+        "The document carries over most of the source's asides, history, hedges, and speculation, largely in the source's own framing.",
+        "Several of the source's asides, hedges, or tangents are carried over.",
+        "One or two of the source's asides, hedges, or tangents are carried over.",
+        "The document carries over none of the source's asides, history, hedges, or unresolved speculation. Everything in it is something the reader needs."
       ]
     }
   },
-  "scannability_factors": [
-    "section_scannability",
-    "parallel_items_listed",
-    "heading_clarity"
-  ],
+  "composites": {
+    "scannability": [
+      "blocks_kept_short",
+      "parallel_items_listed",
+      "heading_clarity"
+    ]
+  },
   "report_dimensions": [
-    "outcome_first",
+    "core_info_first",
+    "title_names_the_outcome",
     "scannability",
+    "structure_not_bolded",
     "plain_language",
-    "detail_separated",
-    "conciseness"
+    "padding",
+    "content_earns_its_place",
+    "requirements_retained",
+    "asides_dropped"
   ]
 }

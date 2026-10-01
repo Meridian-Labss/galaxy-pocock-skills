@@ -21,14 +21,14 @@ This document follows its own rules. Treat its shape as the target register.
 
 A reader should get the meaning by moving their eyes down the page, not by reading every line.
 
-- Break up any paragraph that runs several sentences long.
+- Break up any paragraph that runs more than 3 sentences long.
 - Use short, meaningful subtitles so a reader can find the section they need.
 - Use bullet points or numbered lists for parallel items, including comma-delimited runs inside a sentence.
 - Never mark structure with bold text: a multi-sentence item gets a `###` subheading, a short one gets a plain bullet.
 
 ### Say it once
 
-- Concise to the point of terse: the fewest words that still convey the meaning.
+- Be extremely concise. Use the fewest words that convey the important info. Sacrifice grammar for the sake of brevity.
 - Cut hedging and throat-clearing ("worth noting", "this is not X, it's Y") and phrases that do not aid understanding.
 - Never restate a point already made.
 
@@ -39,6 +39,7 @@ A document inherits the register of whatever it was written from. Write in the r
 - Replace in-house nicknames and code identifiers with plain terms. If people will need the code name, map it once ('the mail queue - "the outbox" in the code') and use the plain term from then on.
 - State each fact in plain words and cite its ticket or incident in parentheses; the reader must never need to open one to follow a sentence.
 - Leave the source's asides, history, and hedges behind; carry over only what the reader needs.
+- Explain a necessary technical term the first time it appears, in a clause, not a glossary. Terms the document is about need no explanation.
 
 ## Rewrite on sight
 
@@ -48,6 +49,10 @@ After drafting, re-scan the whole document and rewrite every match. These patter
 - `Columns: alpha, beta, gamma, delta, epsilon.` (four or more items delimited in one sentence) → a lead-in line, then one bullet per item. Inside a bullet, keep the bullet as the lead-in and nest one sub-bullet per item.
 - "A stores its state locally. B stores its state locally. C also keeps local state." (the same kind of statement about several things in a row) → a lead-in line, then one bullet per thing.
 - "The postman drains the outbox after every blue-green" (an in-house nickname or code identifier doing the work of a noun) → the plain term, mapped once at first mention if the code name aids finding it.
+- A first section that explains cause, background, or mechanism (`## Problem`, `## Background`, `## Context`) with no summary above it → two or three sentences at the top stating the outcome in the reader's terms, then that section unchanged.
+- A code identifier, file path, or function name in the title or the opening summary ("formatDueDate() uses local timezone instead of UTC") → the plain-language effect ("Invoice due dates show a day early for customers behind UTC"), with the identifier kept for the detail sections below.
+- "What happens when Redis is down?" (a heading that asks its section's question instead of stating its answer) → the finding as a statement ("Redis being down needs a different answer per subsystem").
+- Any sentence whose subject is the document itself ("This doc lays out what's firm and what isn't", "This document covers the problems and the open questions", "Below you'll find...") → delete the whole sentence. The headings already say what the document contains. This survives drafting more often than any other pattern here, so check for it explicitly.
 
 ## Technical designs
 
@@ -71,10 +76,10 @@ Work tickets are human integration points where people manage planned, active, a
 
 Pull requests are human integration points where people inspect ongoing work.
 
-- Use a short title that names the work in plain domain language.
-- Make the description digestible enough to guide review attention.
-- Summarise what changed and why.
+- Open with what changed and why it matters, before any explanation of cause or mechanism.
+- Use a short title that names the effect in plain domain language, not the function or file that changed.
 - Name the significant changes and the evidence that the work is correct.
+- Make the description digestible enough to guide review attention.
 - Avoid references to documents or code that require the reader to look something up to understand.
 
 ## Code comments
