@@ -313,16 +313,16 @@ def print_report(scored, texts=None):
         runs_by_arm = grouped[case]
         for arm in ("with", "without"):
             for dims in runs_by_arm[arm]:
-                vals = ", ".join(f"{d}={normalised(dims[d]['score'], d):.3f}" for d in REPORT_DIMENSIONS)
+                vals = ", ".join(f"{d}={normalised(dims[d]['score'], d):.2f}" for d in REPORT_DIMENSIONS)
                 print(f"  {arm:8s} {vals}")
         for dim in REPORT_DIMENSIONS:
             w, wo = average(runs_by_arm, "with", dim), average(runs_by_arm, "without", dim)
-            print(f"    delta {dim}: {w - wo:+.3f}")
+            print(f"    delta {dim}: {w - wo:+.2f}")
             for factor in COMPOSITES.get(dim, ()):
                 fw, fwo = average(runs_by_arm, "with", factor), average(runs_by_arm, "without", factor)
-                print(f"      . {factor}: {fw - fwo:+.3f} (with {fw:.3f}, without {fwo:.3f})")
+                print(f"      . {factor}: {fw - fwo:+.2f} (with {fw:.2f}, without {fwo:.2f})")
         ow, owo = overall(runs_by_arm, "with"), overall(runs_by_arm, "without")
-        print(f"    OVERALL: with {ow:.3f}, without {owo:.3f}, delta {ow - owo:+.3f}")
+        print(f"    OVERALL: with {ow:.2f}, without {owo:.2f}, delta {ow - owo:+.2f}")
         if texts and (line := length_line(texts, case)):
             print(f"    {line}")
         print()
@@ -349,11 +349,11 @@ def write_markdown_report(scored, texts, plugin_root, case_glob, out_dir=None):
     lines += ["## Overall", "", "| Case | With | Without | Delta |", "|---|---|---|---|"]
     for case in sorted(grouped):
         ow, owo = overall(grouped[case], "with"), overall(grouped[case], "without")
-        lines.append(f"| {case} | {ow:.3f} | {owo:.3f} | {ow - owo:+.3f} |")
+        lines.append(f"| {case} | {ow:.2f} | {owo:.2f} | {ow - owo:+.2f} |")
     every = {arm: [overall(grouped[c], arm) for c in grouped] for arm in ("with", "without")}
     mean = {arm: sum(v for v in every[arm] if v == v) / max(sum(1 for v in every[arm] if v == v), 1)
             for arm in ("with", "without")}
-    lines.append(f"| **all cases** | **{mean['with']:.3f}** | **{mean['without']:.3f}** | **{mean['with'] - mean['without']:+.3f}** |")
+    lines.append(f"| **all cases** | **{mean['with']:.2f}** | **{mean['without']:.2f}** | **{mean['with'] - mean['without']:+.2f}** |")
     lines += ["", "Overall is the unweighted mean of the dimensions below it.", ""]
 
     for case in sorted(grouped):
@@ -364,12 +364,12 @@ def write_markdown_report(scored, texts, plugin_root, case_glob, out_dir=None):
         lines.append("|---|---|---|---|")
         for dim in REPORT_DIMENSIONS:
             w, wo = average(runs_by_arm, "with", dim), average(runs_by_arm, "without", dim)
-            lines.append(f"| {dim} | {w:.3f} | {wo:.3f} | {w - wo:+.3f} |")
+            lines.append(f"| {dim} | {w:.2f} | {wo:.2f} | {w - wo:+.2f} |")
             for factor in COMPOSITES.get(dim, ()):
                 fw, fwo = average(runs_by_arm, "with", factor), average(runs_by_arm, "without", factor)
-                lines.append(f"| &nbsp;&nbsp;· {factor} | {fw:.3f} | {fwo:.3f} | {fw - fwo:+.3f} |")
+                lines.append(f"| &nbsp;&nbsp;· {factor} | {fw:.2f} | {fwo:.2f} | {fw - fwo:+.2f} |")
         ow, owo = overall(runs_by_arm, "with"), overall(runs_by_arm, "without")
-        lines.append(f"| **overall** | **{ow:.3f}** | **{owo:.3f}** | **{ow - owo:+.3f}** |")
+        lines.append(f"| **overall** | **{ow:.2f}** | **{owo:.2f}** | **{ow - owo:+.2f}** |")
         lines.append("")
         if line := length_line(texts, case):
             lines.append(line)
