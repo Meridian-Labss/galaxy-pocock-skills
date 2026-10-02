@@ -14,7 +14,7 @@ Reach for it when writing a technical design, ticket, pull request, project docu
 
 - **Technical designs:** start with a short summary and keep the early design easy to discuss. Use diagrams when they clarify structure or flow.
 - **Work tickets:** use a short title in plain domain language. Put the outcome, scope, constraints, and acceptance criteria first. Keep implementer detail below the fold.
-- **Pull requests:** use a short title in plain domain language. Keep the diff small and the description digestible. Summarise what changed and why, and show evidence. Give readers enough context to understand the description without opening referenced documents or code.
+- **Pull requests:** open with what changed and why it matters, before any explanation of cause or mechanism. Title the effect in plain domain language, not the function or file that changed. Name the significant changes and show evidence. Give readers enough context to understand the description without opening referenced documents or code.
 - **Code comments:** preserve the intent, rationale, constraints, and provenance needed to understand current behaviour. Keep comments short and explain the relevance of useful references locally. Keep change history in version control and remove stale explanations.
 
 ## Common questions

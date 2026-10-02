@@ -7,19 +7,21 @@
 
 Runs `claude plugin eval` for the given case glob (default: every clean-mode
 case), then scores each captured with/without output on dimensions taken
-from clean-mode's own general principles: whether the opening states the
-outcome before implementation detail, whether it scans (short paragraphs,
-lists for parallel items, proportionate headings), whether implementation
-detail is kept separate from the summary, and whether it's padded with
-hedging or restatement. The questions themselves (instructions plus ordered
-criteria levels) live in dimensions.json next to this script - edit that
-file to change what gets measured. The response text is read directly from each run's
-trace, not from a grader - the cases carry no LLM graders, so this is the
-only scoring in play; Jev is the sole judge. Use --from to re-score an
+from clean-mode's own general principles: whether the opening leads with the
+core information rather than the mechanism behind it, whether it scans (short
+paragraphs, lists for parallel items, proportionate headings), whether
+implementation detail is kept separate from the summary, whether it's padded
+with hedging or restatement, and whether every section earns its place. The
+questions themselves (instructions plus ordered criteria levels) live in
+dimensions.json next to this script - edit that file to change what gets
+measured. The response text is read directly from each run's trace, not from
+a grader - the cases carry no LLM graders, so this is the only scoring in
+play; Jev is the sole judge. Use --from to re-score an
 existing `claude plugin eval --json` result instead of running a new eval.
 """
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -43,18 +45,42 @@ except ImportError:
 DIMENSIONS_FILE = Path(__file__).with_name("dimensions.json")
 _config = json.loads(DIMENSIONS_FILE.read_text())
 
-DIMENSIONS = {
-    name: Score(instructions=d["instructions"], criteria=d["criteria"])
-    for name, d in _config["dimensions"].items()
-}
-SCANNABILITY_FACTORS = tuple(_config["scannability_factors"])
+# Some questions need the source material the document was written from, which
+# means a second Jev call against a different state. They are kept as separate
+# calls on purpose: the sources are deliberately unedited prose, and a judge
+# that has just read one anchors on it when scoring the document's register.
+STATE_TEMPLATES = _config.get("state", {"document_only": "{document}"})
+DIMENSIONS_BY_STATE = {}
+for _name, _d in _config["dimensions"].items():
+    _state = _d.get("state", "document_only")
+    if _state not in STATE_TEMPLATES:
+        sys.exit(f"{DIMENSIONS_FILE}: dimension {_name} wants unknown state {_state!r}")
+    DIMENSIONS_BY_STATE.setdefault(_state, {})[_name] = Score(
+        instructions=_d["instructions"], criteria=_d["criteria"]
+    )
+DIMENSIONS = {n: q for qs in DIMENSIONS_BY_STATE.values() for n, q in qs.items()}
+# A composite is a report row with no question of its own: it is the mean of
+# its factors, each normalised by its own ladder first. Factors stay out of
+# report_dimensions and are listed under their composite instead.
+COMPOSITES = {name: tuple(factors) for name, factors in _config.get("composites", {}).items()}
 REPORT_DIMENSIONS = list(_config["report_dimensions"])
 
-# Dimensions may use different numbers of criteria levels, so a raw score of
-# 2 means "top" on a 3-level scale but "middle" on a 5-level one. The
-# composite normalises each factor by its own top level, then rescales to
-# 0-2 so it reads like the other report dimensions.
+# A Jev score is a position on the dimension's own criteria ladder, so its
+# range is set by how many levels that dimension defines: 0-2 for a 3-level
+# question, 0-4 for a 5-level one. Raw scores stay on their native ladder
+# everywhere (--out keeps them, so a score still maps onto its criterion
+# text); the report divides by the dimension's top level and prints a 0-1
+# fraction, so columns built from different ladders are comparable and a
+# delta between two of them carries no unit to misread.
 DIMENSION_TOP = {name: len(d["criteria"]) - 1 for name, d in _config["dimensions"].items()}
+# A composite is already built from normalised factors, so its own ladder is
+# 0-1 and the report's division by the top level is a no-op.
+for _name in COMPOSITES:
+    DIMENSION_TOP[_name] = 1
+
+_missing = [d for d in REPORT_DIMENSIONS if d not in DIMENSION_TOP]
+if _missing:
+    sys.exit(f"{DIMENSIONS_FILE}: report_dimensions names nothing: {', '.join(_missing)}")
 
 
 def run_eval(case_glob, runs, plugin_root):
@@ -136,6 +162,53 @@ def extract_texts(result):
     return texts, kept_dirs
 
 
+def load_sources(plugin_root="."):
+    """The prompt each case was generated from, keyed by case name.
+
+    A with_source question compares the document against this. The design
+    case's code fixture is deliberately not included: that case's prompt says
+    to write for a reader who will not open the code, so a fact available only
+    in the fixture is an addition, not a retention.
+    """
+    sources = {}
+    for case_dir in sorted((Path(plugin_root) / "evals").glob("*/")):
+        prompt_md, case_yaml = case_dir / "prompt.md", case_dir / "case.yaml"
+        if prompt_md.exists():
+            parts = prompt_md.read_text().split("---", 2)
+            sources[case_dir.name] = parts[2].strip() if len(parts) > 2 else prompt_md.read_text()
+        elif case_yaml.exists():
+            import yaml
+            loaded = yaml.safe_load(case_yaml.read_text()) or {}
+            prompt = (loaded.get("execution") or {}).get("prompt")
+            if prompt:
+                sources[case_dir.name] = prompt.strip()
+    return sources
+
+
+def texts_from_report(report_path):
+    """Pull the captured outputs back out of a previous run's report.md.
+
+    Re-scoring these costs one Jev call per output and no eval runs at all, so
+    a dimension change can be measured against outputs that already exist
+    rather than against freshly generated ones.
+    """
+    text = Path(report_path).read_text()
+    bounds = [(m.group(1), m.start()) for m in re.finditer(r"^## (clean-mode-[\w-]+)$", text, re.M)]
+    texts = {}
+    for i, (case, start) in enumerate(bounds):
+        block = text[start:bounds[i + 1][1] if i + 1 < len(bounds) else len(text)]
+        for arm in ("with", "without"):
+            found = re.search(rf"<details><summary>{arm} outputs.*?</summary>\n(.*?)\n</details>", block, re.S)
+            if not found:
+                continue
+            for j, part in enumerate(re.split(r"^\*\*Run \d+\*\*$", found.group(1), flags=re.M)[1:]):
+                body = part.strip()
+                if not (body.startswith("```markdown") and body.endswith("```")):
+                    sys.exit(f"could not parse {case} {arm} run {j + 1} out of {report_path}")
+                texts[f"{case}__{arm}__{j}"] = body[len("```markdown"):-3].strip("\n")
+    return texts
+
+
 def cleanup_kept_dirs(kept_dirs):
     for d in kept_dirs:
         if not d.exists():
@@ -144,23 +217,64 @@ def cleanup_kept_dirs(kept_dirs):
         shutil.rmtree(d, ignore_errors=True)
 
 
-def score_texts(texts):
+def score_texts(texts, sources=None):
+    sources = sources or {}
+    skipped = set()
     scored = {}
     with TypeSafeClient() as client:
         for key, text in texts.items():
-            response = client.system_one(state=text, questions=DIMENSIONS)
-            raw = {
-                qid: {"score": ans.score, "confidence": ans.confidence}
-                for qid, ans in response.answers.items()
-            }
-            normalised = [raw[f]["score"] / DIMENSION_TOP[f] for f in SCANNABILITY_FACTORS]
-            factor_confidences = [raw[f]["confidence"] for f in SCANNABILITY_FACTORS]
-            raw["scannability"] = {
-                "score": 2 * sum(normalised) / len(normalised),
-                "confidence": sum(factor_confidences) / len(factor_confidences),
-            }
+            case = key.rsplit("__", 2)[0]
+            raw = {}
+            for state, questions in DIMENSIONS_BY_STATE.items():
+                template = STATE_TEMPLATES[state]
+                if "{source}" in template and case not in sources:
+                    skipped.add(case)
+                    continue
+                response = client.system_one(
+                    state=template.format(document=text, source=sources.get(case, "")),
+                    questions=questions,
+                )
+                raw.update({
+                    qid: {
+                        "score": ans.score,
+                        "confidence": ans.confidence,
+                        "probabilities": {str(k): v for k, v in ans.probabilities.items()},
+                    }
+                    for qid, ans in response.answers.items()
+                })
+            for name, factors in COMPOSITES.items():
+                parts = [raw[f]["score"] / DIMENSION_TOP[f] for f in factors]
+                confidences = [raw[f]["confidence"] for f in factors]
+                raw[name] = {
+                    "score": sum(parts) / len(parts),
+                    "confidence": sum(confidences) / len(confidences),
+                }
             scored[key] = raw
+    for case in sorted(skipped):
+        print(f"warning: no source found for {case}; its with_source dimensions were not scored",
+              file=sys.stderr)
     return scored
+
+
+def mean_length(texts, case, arm):
+    lengths = [len(v) for k, v in texts.items() if k.startswith(f"{case}__{arm}__")]
+    return sum(lengths) / len(lengths) if lengths else float("nan")
+
+
+def length_change(texts, case):
+    """Percent change in mean output length, with vs without. Negative is shorter."""
+    w, wo = mean_length(texts, case, "with"), mean_length(texts, case, "without")
+    if wo != wo or w != w or not wo:  # nan guard
+        return float("nan")
+    return (w - wo) / wo * 100
+
+
+def length_line(texts, case):
+    w, wo = mean_length(texts, case, "with"), mean_length(texts, case, "without")
+    change = length_change(texts, case)
+    if change != change:
+        return None
+    return f"Mean output length: with {w:,.0f} characters, without {wo:,.0f} ({change:+.0f}%)."
 
 
 def group_by_case(scored):
@@ -173,34 +287,61 @@ def group_by_case(scored):
 
 
 def average(runs_by_arm, arm, dim):
-    vals = [r[dim]["score"] for r in runs_by_arm[arm]]
+    """Mean score for an arm, as a 0-1 fraction of the dimension's top level.
+
+    A dimension can be missing from a run: a with_source question is skipped
+    when its case has no source. Those runs drop out of the mean rather than
+    raising, and a dimension missing from every run reports nan.
+    """
+    vals = [r[dim]["score"] for r in runs_by_arm[arm] if dim in r]
+    if not vals:
+        return float("nan")
+    return (sum(vals) / len(vals)) / DIMENSION_TOP[dim]
+
+
+def normalised(score, dim):
+    return score / DIMENSION_TOP[dim]
+
+
+def overall(runs_by_arm, arm):
+    """Unweighted mean of the report dimensions, all already on the same 0-1 scale.
+
+    Equal weight is a choice, not a measurement: it says a point of brevity
+    counts the same as a point of plain language. scannability enters as one
+    dimension, so its three factors share a sixth of the total between them.
+    """
+    vals = [average(runs_by_arm, arm, d) for d in REPORT_DIMENSIONS]
+    vals = [v for v in vals if v == v]  # a dimension with no runs scores nan
     return sum(vals) / len(vals) if vals else float("nan")
 
 
-def print_report(scored):
+def print_report(scored, texts=None):
     grouped = group_by_case(scored)
     for case in sorted(grouped):
         print(f"=== {case} ===")
         runs_by_arm = grouped[case]
         for arm in ("with", "without"):
             for dims in runs_by_arm[arm]:
-                vals = ", ".join(f"{d}={dims[d]['score']:.2f}" for d in REPORT_DIMENSIONS)
+                vals = ", ".join(f"{d}={normalised(dims[d]['score'], d):.2f}" for d in REPORT_DIMENSIONS)
                 print(f"  {arm:8s} {vals}")
         for dim in REPORT_DIMENSIONS:
             w, wo = average(runs_by_arm, "with", dim), average(runs_by_arm, "without", dim)
             print(f"    delta {dim}: {w - wo:+.2f}")
-            if dim == "scannability":
-                for factor in SCANNABILITY_FACTORS:
-                    fw, fwo = average(runs_by_arm, "with", factor), average(runs_by_arm, "without", factor)
-                    print(f"      . {factor}: {fw - fwo:+.2f} (with {fw:.2f}, without {fwo:.2f})")
+            for factor in COMPOSITES.get(dim, ()):
+                fw, fwo = average(runs_by_arm, "with", factor), average(runs_by_arm, "without", factor)
+                print(f"      . {factor}: {fw - fwo:+.2f} (with {fw:.2f}, without {fwo:.2f})")
+        ow, owo = overall(runs_by_arm, "with"), overall(runs_by_arm, "without")
+        print(f"    OVERALL: with {ow:.2f}, without {owo:.2f}, delta {ow - owo:+.2f}")
+        if texts and (line := length_line(texts, case)):
+            print(f"    {line}")
         print()
 
 
-def write_markdown_report(scored, texts, plugin_root, case_glob):
+def write_markdown_report(scored, texts, plugin_root, case_glob, out_dir=None):
     grouped = group_by_case(scored)
     runs = max((len(arms["with"]) for arms in grouped.values()), default=0)
     generated_at = datetime.now(timezone.utc)
-    out_dir = Path(plugin_root) / "evals" / "results" / (generated_at.strftime("%Y-%m-%dT%H-%M-%S") + "-jev")
+    out_dir = Path(out_dir) if out_dir else Path(plugin_root) / "evals" / "results" / (generated_at.strftime("%Y-%m-%dT%H-%M-%S") + "-jev")
     out_dir.mkdir(parents=True, exist_ok=True)
     report_path = out_dir / "report.md"
 
@@ -209,7 +350,30 @@ def write_markdown_report(scored, texts, plugin_root, case_glob):
         "",
         f"Generated {generated_at.strftime('%Y-%m-%dT%H:%M:%SZ')} · case filter `{case_glob}` · {runs} run(s) per arm.",
         "",
+        f"Dimensions: {', '.join(REPORT_DIMENSIONS)}.",
+        "",
+        "Each score is a 0-1 fraction of its dimension's top criteria level, averaged over the arm's runs. Delta is the plain difference between the two.",
+        "",
     ]
+    lines += ["## Overall", "", "| Case | With | Without | Delta | Length |", "|---|---|---|---|---|"]
+    changes = []
+    for case in sorted(grouped):
+        ow, owo = overall(grouped[case], "with"), overall(grouped[case], "without")
+        change = length_change(texts, case)
+        if change == change:
+            changes.append(change)
+        lines.append(f"| {case} | {ow:.2f} | {owo:.2f} | {ow - owo:+.2f} | "
+                     f"{f'{change:+.0f}%' if change == change else 'n/a'} |")
+    every = {arm: [overall(grouped[c], arm) for c in grouped] for arm in ("with", "without")}
+    mean = {arm: sum(v for v in every[arm] if v == v) / max(sum(1 for v in every[arm] if v == v), 1)
+            for arm in ("with", "without")}
+    every_change = f"**{sum(changes) / len(changes):+.0f}%**" if changes else "n/a"
+    lines.append(f"| **all cases** | **{mean['with']:.2f}** | **{mean['without']:.2f}** | "
+                 f"**{mean['with'] - mean['without']:+.2f}** | {every_change} |")
+    lines += ["", "Overall is the unweighted mean of the dimensions below it. Length is the change in "
+              "mean output length with the skill against without; negative is shorter, and it is "
+              "reported alongside rather than folded into the score.", ""]
+
     for case in sorted(grouped):
         runs_by_arm = grouped[case]
         lines.append(f"## {case}")
@@ -219,11 +383,15 @@ def write_markdown_report(scored, texts, plugin_root, case_glob):
         for dim in REPORT_DIMENSIONS:
             w, wo = average(runs_by_arm, "with", dim), average(runs_by_arm, "without", dim)
             lines.append(f"| {dim} | {w:.2f} | {wo:.2f} | {w - wo:+.2f} |")
-            if dim == "scannability":
-                for factor in SCANNABILITY_FACTORS:
-                    fw, fwo = average(runs_by_arm, "with", factor), average(runs_by_arm, "without", factor)
-                    lines.append(f"| &nbsp;&nbsp;· {factor} | {fw:.2f} | {fwo:.2f} | {fw - fwo:+.2f} |")
+            for factor in COMPOSITES.get(dim, ()):
+                fw, fwo = average(runs_by_arm, "with", factor), average(runs_by_arm, "without", factor)
+                lines.append(f"| &nbsp;&nbsp;· {factor} | {fw:.2f} | {fwo:.2f} | {fw - fwo:+.2f} |")
+        ow, owo = overall(runs_by_arm, "with"), overall(runs_by_arm, "without")
+        lines.append(f"| **overall** | **{ow:.2f}** | **{owo:.2f}** | **{ow - owo:+.2f}** |")
         lines.append("")
+        if line := length_line(texts, case):
+            lines.append(line)
+            lines.append("")
         for arm in ("with", "without"):
             arm_texts = [texts[k] for k in texts if k.startswith(f"{case}__{arm}__")]
             lines.append(f"<details><summary>{arm} outputs ({len(arm_texts)} run(s))</summary>")
@@ -239,6 +407,7 @@ def write_markdown_report(scored, texts, plugin_root, case_glob):
             lines.append("")
 
     report_path.write_text("\n".join(lines))
+    (out_dir / "scores.json").write_text(json.dumps(scored, indent=2, sort_keys=True))
     return report_path
 
 
@@ -247,19 +416,22 @@ def main():
     parser.add_argument("--case", default="clean-mode-*", help="claude plugin eval --case glob")
     parser.add_argument("--runs", type=int, default=1, help="runs per arm per case")
     parser.add_argument("--from", dest="from_json", help="reuse an existing `claude plugin eval --json` result instead of running a new eval")
+    parser.add_argument("--from-report", help="re-score the outputs captured in a previous run's report.md, with no eval run at all")
     parser.add_argument("--plugin-root", default=".", help="plugin directory passed to claude plugin eval")
     parser.add_argument("--out", help="write raw Jev scores as JSON to this path")
     args = parser.parse_args()
 
-    result = json.loads(Path(args.from_json).read_text()) if args.from_json else run_eval(args.case, args.runs, args.plugin_root)
-
-    texts, kept_dirs = extract_texts(result)
-    cleanup_kept_dirs(kept_dirs)
+    if args.from_report:
+        texts = texts_from_report(args.from_report)
+    else:
+        result = json.loads(Path(args.from_json).read_text()) if args.from_json else run_eval(args.case, args.runs, args.plugin_root)
+        texts, kept_dirs = extract_texts(result)
+        cleanup_kept_dirs(kept_dirs)
     if not texts:
         sys.exit("no last_message text found in eval result")
 
-    scored = score_texts(texts)
-    print_report(scored)
+    scored = score_texts(texts, load_sources(args.plugin_root))
+    print_report(scored, texts)
 
     report_path = write_markdown_report(scored, texts, args.plugin_root, args.case)
     print(f"Jev report: {report_path}")

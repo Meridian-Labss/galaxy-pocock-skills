@@ -1,1 +1,2 @@
 typesafe-sdk
+pyyaml
