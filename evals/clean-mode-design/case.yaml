@@ -6,7 +6,7 @@ context:
 execution:
   max_turns: 12
   model: claude-sonnet-5
-  allowed_tools: [Skill, Read, Glob, Grep]
+  allowed_tools: [Skill, Read, Glob, Grep, Task, Agent]
   prompt: >
     These are your own notes from today's ad-hoc chat about consolidating
     some infra pain points, typed fast before they evaporate from your

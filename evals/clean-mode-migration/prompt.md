@@ -1,9 +1,9 @@
 ---
 name: clean-mode-migration
 runs: 3
-max_turns: 8
+max_turns: 12
 model: claude-sonnet-5
-allowed_tools: [Skill]
+allowed_tools: [Skill, Task, Agent]
 ---
 
 You own the integration with our payments provider. They are retiring their v1 API and you need to write the design doc the team will work from. Here is everything you have: the provider's migration email, plus your own notes from the call with their solutions engineer.

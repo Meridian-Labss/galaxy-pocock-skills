@@ -261,11 +261,20 @@ def mean_length(texts, case, arm):
     return sum(lengths) / len(lengths) if lengths else float("nan")
 
 
-def length_line(texts, case):
+def length_change(texts, case):
+    """Percent change in mean output length, with vs without. Negative is shorter."""
     w, wo = mean_length(texts, case, "with"), mean_length(texts, case, "without")
     if wo != wo or w != w or not wo:  # nan guard
+        return float("nan")
+    return (w - wo) / wo * 100
+
+
+def length_line(texts, case):
+    w, wo = mean_length(texts, case, "with"), mean_length(texts, case, "without")
+    change = length_change(texts, case)
+    if change != change:
         return None
-    return f"Mean output length: with {w:,.0f} characters, without {wo:,.0f} ({(wo - w) / wo * 100:+.0f}% shorter with the skill)."
+    return f"Mean output length: with {w:,.0f} characters, without {wo:,.0f} ({change:+.0f}%)."
 
 
 def group_by_case(scored):
@@ -346,15 +355,24 @@ def write_markdown_report(scored, texts, plugin_root, case_glob, out_dir=None):
         "Each score is a 0-1 fraction of its dimension's top criteria level, averaged over the arm's runs. Delta is the plain difference between the two.",
         "",
     ]
-    lines += ["## Overall", "", "| Case | With | Without | Delta |", "|---|---|---|---|"]
+    lines += ["## Overall", "", "| Case | With | Without | Delta | Length |", "|---|---|---|---|---|"]
+    changes = []
     for case in sorted(grouped):
         ow, owo = overall(grouped[case], "with"), overall(grouped[case], "without")
-        lines.append(f"| {case} | {ow:.2f} | {owo:.2f} | {ow - owo:+.2f} |")
+        change = length_change(texts, case)
+        if change == change:
+            changes.append(change)
+        lines.append(f"| {case} | {ow:.2f} | {owo:.2f} | {ow - owo:+.2f} | "
+                     f"{f'{change:+.0f}%' if change == change else 'n/a'} |")
     every = {arm: [overall(grouped[c], arm) for c in grouped] for arm in ("with", "without")}
     mean = {arm: sum(v for v in every[arm] if v == v) / max(sum(1 for v in every[arm] if v == v), 1)
             for arm in ("with", "without")}
-    lines.append(f"| **all cases** | **{mean['with']:.2f}** | **{mean['without']:.2f}** | **{mean['with'] - mean['without']:+.2f}** |")
-    lines += ["", "Overall is the unweighted mean of the dimensions below it.", ""]
+    every_change = f"**{sum(changes) / len(changes):+.0f}%**" if changes else "n/a"
+    lines.append(f"| **all cases** | **{mean['with']:.2f}** | **{mean['without']:.2f}** | "
+                 f"**{mean['with'] - mean['without']:+.2f}** | {every_change} |")
+    lines += ["", "Overall is the unweighted mean of the dimensions below it. Length is the change in "
+              "mean output length with the skill against without; negative is shorter, and it is "
+              "reported alongside rather than folded into the score.", ""]
 
     for case in sorted(grouped):
         runs_by_arm = grouped[case]

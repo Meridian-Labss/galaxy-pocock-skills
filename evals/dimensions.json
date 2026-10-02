@@ -6,12 +6,12 @@
   "dimensions": {
     "core_info_first": {
       "state": "document_only",
-      "instructions": "Judge only the document's opening: the text from the start of the body to the end of the first section. The title is judged by another question and is not judged here; so are all later sections. Does the opening state the outcome, decision, or effect of the work in the reader's terms before it explains cause, background, mechanism, or implementation? Outcome language names what is true for a reader or user ('invoice due dates show a day early for customers behind UTC', 'customers can download their invoices as a CSV'). Cause and mechanism language names how the system is built or why it behaves that way ('the formatter uses local-timezone getters', 'session state lives in a per-process in-memory map'). A metadata block (status, author, date, priority) is not a statement of outcome.",
+      "instructions": "Judge only the document's opening: the text from the start of the body to the end of the first section. Does the opening lead with the core information, meaning whatever a reader most needs to take away, before it explains cause, background, mechanism, or implementation? What counts as core varies by document, and the document chooses: the outcome or decision ('customers can download their invoices as a CSV'), the effect on a reader or user ('invoice due dates show a day early for customers behind UTC'), the governing constraint or deadline ('API keys stop working on 15 January, before the v1 sunset'), or the risk driving the work. Any of these satisfies the question. Cause and mechanism language names how the system is built or why it behaves that way ('the formatter uses local-timezone getters', 'session state lives in a per-process in-memory map') and does not. A metadata block (status, author, date, priority) is not core information.",
       "criteria": [
-        "The opening never states the outcome, decision, or effect. It is entirely cause, background, mechanism, implementation detail, metadata, or raw notes.",
-        "The opening states the outcome, decision, or effect only after first explaining cause, background, or mechanism.",
-        "The opening leads with the outcome, decision, or effect, then mixes further cause, mechanism, or implementation detail into the same opening.",
-        "The opening leads with the outcome, decision, or effect and states it in full, leaving cause, mechanism, and implementation detail to later sections."
+        "The opening never states the core information. It is entirely cause, background, mechanism, implementation detail, metadata, or raw notes.",
+        "The opening states the core information only after first explaining cause, background, or mechanism.",
+        "The opening leads with the core information, then mixes further cause, mechanism, or implementation detail into the same opening.",
+        "The opening leads with the core information and states it in full, leaving cause, mechanism, and implementation detail to later sections."
       ]
     },
     "title_names_the_outcome": {
@@ -46,12 +46,12 @@
     },
     "heading_clarity": {
       "state": "document_only",
-      "instructions": "Headings are what a reader lands on when moving the eyes down the page, so a heading has to convey what its section holds without the section being read. Judge the document's section headings, each read on its own. A heading fails by being a generic container label ('Details', 'Notes', 'Background', 'Summary', 'Scope'), jargon or a code identifier, a metaphor or a mood ('a quiet hole', 'visible pain'), or a question whose answer the section goes on to give. Judge only actual markdown heading lines, and exclude the title, which another question judges. Bold lead-ins on paragraphs or list items are not headings and are judged elsewhere, as are section bodies and how many headings the document has.",
+      "instructions": "Headings are what a reader lands on when moving the eyes down the page, so a heading has to convey what its section holds without the section being read. Judge the document's section headings, each read on its own. A heading fails when it names a container rather than its contents: 'Notes' and 'Details' could sit above anything, so they tell a reader nothing, whereas 'Summary' is fine because a reader knows exactly what they will find under it. A heading also fails by being jargon or a code identifier, or a metaphor or a mood ('a quiet hole', 'visible pain'). A question is a perfectly good heading and never fails for being one: judge it on whether it names its section's concrete subject ('What happens when Redis is down?' succeeds; 'Open questions?' does not). Judge only actual markdown heading lines, and exclude the title, which another question judges. Bold lead-ins on paragraphs or list items are not headings and are judged elsewhere, as are section bodies and how many headings the document has.",
       "criteria": [
-        "Most heading lines are generic container labels, jargon, code identifiers, metaphors, or questions, and do not state what their section holds.",
-        "Roughly half the heading lines state their section's point; the rest are generic labels, jargon, code identifiers, metaphors, or questions.",
-        "Most heading lines state their section's point, and one or two are generic labels, jargon, code identifiers, metaphors, or questions.",
-        "Every heading line, read on its own, states its section's concrete point in plain language."
+        "Most heading lines name a container rather than their contents, or are jargon, code identifiers, or metaphors.",
+        "Roughly half the heading lines name their section's concrete subject; the rest name a container, or are jargon, code identifiers, or metaphors.",
+        "Most heading lines name their section's concrete subject, and one or two name a container or are jargon, code identifiers, or metaphors.",
+        "Every heading line, read on its own, names its section's concrete subject in plain language."
       ]
     },
     "structure_not_bolded": {
@@ -96,7 +96,7 @@
     },
     "requirements_retained": {
       "state": "with_source",
-      "instructions": "The SOURCE contains facts a reader of the DOCUMENT will need: requirements, constraints, decisions already made, open questions, named risks, acceptance conditions, numbers, and deadlines. How many of those survive into the document? A fact counts as retained if the document conveys it in any form; it does not have to use the source's words, keep its order, or match its length. Judge only load-bearing facts, meaning things a reader would act on, decide with, or be caught out by if they were missing. Do not penalize the document for adding correct information the source does not contain, for reordering, for compressing, or for leaving behind the source's asides, history, and hedges, which another question judges. Do not judge the document's writing here, only what it kept.",
+      "instructions": "A READER must use the DOCUMENT to perform tasks. The SOURCE contains facts the DOCUMENT should contain so that the READER can do the work specified. It also contains many things that are not useful to the READER such as asides, historical context, commentary, etc. How much useful information from the SOURCE is present in the DOCUMENT? A fact counts as retained if the document conveys it in any form.",
       "criteria": [
         "Several load-bearing facts from the source are missing, including at least one a reader would be caught out by, such as a stated constraint, risk, or acceptance condition.",
         "One load-bearing fact a reader would be caught out by is missing, or several minor ones are.",
@@ -113,6 +113,16 @@
         "One or two of the source's asides, hedges, or tangents are carried over.",
         "The document carries over none of the source's asides, history, hedges, or unresolved speculation. Everything in it is something the reader needs."
       ]
+    },
+    "economy": {
+      "state": "document_only",
+      "instructions": "How close is the document's expression to the shortest form that still conveys its points? Judge how much text each point costs, not which points the document makes: a sentence that could be a clause, a paragraph that could be a sentence, a table or list whose rows say what one line would say, a long wind-up to a short point, and words that could be deleted without changing the meaning. Do not judge whether a point belongs in the document at all. Note-style fragments and dropped grammar count as economical when they stay clear.",
+      "criteria": [
+        "Most of the document could convey the same points in meaningfully fewer words.",
+        "Many sentences or sections could be tightened substantially without losing meaning.",
+        "A few sentences or sections could be tightened without losing meaning.",
+        "Every sentence is already as short as it can be; nothing could be tightened without losing meaning."
+      ]
     }
   },
   "composites": {
@@ -120,6 +130,10 @@
       "blocks_kept_short",
       "parallel_items_listed",
       "heading_clarity"
+    ],
+    "concision": [
+      "padding",
+      "economy"
     ]
   },
   "report_dimensions": [
@@ -128,7 +142,7 @@
     "scannability",
     "structure_not_bolded",
     "plain_language",
-    "padding",
+    "concision",
     "content_earns_its_place",
     "requirements_retained",
     "asides_dropped"

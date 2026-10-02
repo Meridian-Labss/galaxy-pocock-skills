@@ -1,9 +1,9 @@
 ---
 name: clean-mode-ticket
 runs: 3
-max_turns: 8
+max_turns: 12
 model: claude-sonnet-5
-allowed_tools: [Skill]
+allowed_tools: [Skill, Task, Agent]
 ---
 
 Someone forwarded you this from #support-escalations, and you need to turn it into a ticket:

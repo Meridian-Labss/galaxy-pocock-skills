@@ -1,9 +1,9 @@
 ---
 name: clean-mode-pr
 runs: 3
-max_turns: 8
+max_turns: 12
 model: claude-sonnet-5
-allowed_tools: [Skill]
+allowed_tools: [Skill, Task, Agent]
 ---
 
 You are wrapping up a bug fix and need to open a pull request. Here are your own rough notes, written right after you finished:
