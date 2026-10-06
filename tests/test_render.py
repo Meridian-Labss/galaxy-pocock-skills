@@ -54,3 +54,16 @@ def test_render_lists_scored_and_unscored_items():
 
 def test_render_says_so_when_nothing_changed():
     assert "No changed Markdown" in render(CONFIG, [])
+
+
+def test_render_escapes_pipes_in_table_labels():
+    md = render(CONFIG, [ItemResult("`a|b.md`", scores())])
+    assert "| `a\\|b.md` | 1.00 |" in md
+
+
+def test_render_caps_the_not_scored_list():
+    paths = [f"f{i}.md" for i in range(25)]
+    md = render(CONFIG, [], over_limit=paths, max_files=1)
+    assert "- `f19.md`: over the 1-file limit" in md
+    assert "`f20.md`" not in md
+    assert "- ...and 5 more" in md

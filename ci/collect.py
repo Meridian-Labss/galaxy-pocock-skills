@@ -25,7 +25,7 @@ def changed_docs(base, head="HEAD", cwd="."):
     """
     result = subprocess.run(
         ["git", "diff", "--numstat", "-z", "-M", "--diff-filter=AMR", f"{base}...{head}"],
-        cwd=cwd, check=True, capture_output=True, text=True,
+        cwd=cwd, check=True, capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     return parse_numstat(result.stdout)
 
@@ -52,10 +52,14 @@ def parse_numstat(output):
     return docs
 
 
+def has_control_character(path):
+    return any(ord(c) < 32 or ord(c) == 127 for c in path)
+
+
 def matches(path, patterns):
     """fnmatch, except a leading "**/" also matches files at the repo root."""
     return any(
-        fnmatch.fnmatch(path, p) or (p.startswith("**/") and fnmatch.fnmatch(path, p[3:]))
+        fnmatch.fnmatchcase(path, p) or (p.startswith("**/") and fnmatch.fnmatchcase(path, p[3:]))
         for p in patterns
     )
 
@@ -66,7 +70,8 @@ def select(docs, patterns, min_lines, max_files, max_chars, root="."):
     Oversized docs count toward max_files, so the comment lists every doc the
     limit let through, scored or not.
     """
-    wanted = [d for d in docs if matches(d.path, patterns) and d.lines_changed >= min_lines]
+    wanted = [d for d in docs if matches(d.path, patterns) and d.lines_changed >= min_lines
+              and not has_control_character(d.path)]
     wanted.sort(key=lambda d: -d.lines_changed)
     to_score, too_large = [], []
     for doc in wanted[:max_files]:

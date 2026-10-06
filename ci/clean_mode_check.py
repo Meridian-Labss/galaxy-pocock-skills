@@ -10,8 +10,10 @@ In GitHub Actions, --event-path (default $GITHUB_EVENT_PATH) supplies the
 base commit, PR title, body, and number, and --post updates the PR comment.
 """
 import argparse
+import http.client
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -23,6 +25,11 @@ from post_comment import upsert_comment  # noqa: E402
 from render import MARKER, ItemResult, render  # noqa: E402
 
 PR_LABEL = "PR description"
+
+
+def escape_command(text):
+    """Escape text for a GitHub workflow command message."""
+    return str(text).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
 
 def parse_args(argv):
@@ -40,14 +47,18 @@ def parse_args(argv):
 
 
 def read_pr(args):
-    """(base, title, body, number), from the event payload unless flags override."""
+    """(base, head, title, body, number), from the event payload unless flags override."""
     pr = {}
     if args.event_path and Path(args.event_path).exists():
-        pr = json.loads(Path(args.event_path).read_text()).get("pull_request", {})
+        pr = json.loads(Path(args.event_path).read_text(encoding="utf-8")).get("pull_request", {})
     base = args.base or pr.get("base", {}).get("sha")
-    title = args.pr_title if args.pr_title is not None else pr.get("title", "")
-    body = Path(args.pr_body_file).read_text() if args.pr_body_file else (pr.get("body") or "")
-    return base, title, body, pr.get("number")
+    head = pr.get("head", {}).get("sha") or "HEAD"
+    title = args.pr_title if args.pr_title is not None else (pr.get("title") or "")
+    body = (
+        Path(args.pr_body_file).read_text(encoding="utf-8")
+        if args.pr_body_file else (pr.get("body") or "")
+    )
+    return base, head, title, body, pr.get("number")
 
 
 def score_items(client, config, items):
@@ -58,7 +69,7 @@ def score_items(client, config, items):
             raw = jev_core.score_text(client, config, text, states={jev_core.DOCUMENT_ONLY})
             results.append(ItemResult(label, raw))
         except jev_core.TypeSafeError as e:
-            print(f"::warning::Jev could not score {label}: {e}")
+            print(f"::warning::{escape_command(f'Jev could not score {label}: {e}')}")
             results.append(ItemResult(label, None, "could not score"))
     return results
 
@@ -70,17 +81,23 @@ def main(argv=None, client=None, post=upsert_comment):
         print("::notice::TYPESAFE_API_KEY is not set (normal for PRs from forks); skipping the clean-mode check")
         return 0
 
-    base, title, body, number = read_pr(args)
+    base, head, title, body, number = read_pr(args)
     if not base:
         print("::notice::no base commit (pass --base or run on a pull_request event); skipping the clean-mode check")
         return 0
     patterns = [p.strip() for p in args.include.split(",") if p.strip()]
-    selection = select(changed_docs(base), patterns, args.min_lines, args.max_files, args.max_chars)
+    try:
+        docs = changed_docs(base, head)
+    except subprocess.CalledProcessError as e:
+        detail = escape_command(f"could not diff {base}...{head}; check out with fetch-depth: 0. {e.stderr}".strip())
+        print(f"::error::{detail}")
+        return 1
+    selection = select(docs, patterns, args.min_lines, args.max_files, args.max_chars)
 
     items = [(f"`{path}`", text) for path, text in selection.to_score]
     unscored = []
     if body.strip():
-        items.insert(0, (PR_LABEL, f"# {title}\n\n{body}"))
+        items.insert(0, (PR_LABEL, f"# {title}\n\n{body}" if title else body))
     else:
         unscored.append(ItemResult(PR_LABEL, None, "no description"))
 
@@ -91,13 +108,15 @@ def main(argv=None, client=None, post=upsert_comment):
     print(markdown)
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_path:
-        with open(summary_path, "a") as f:
+        with open(summary_path, "a", encoding="utf-8") as f:
             f.write(markdown + "\n")
-    if args.post:
+    if args.post and number is None:
+        print("::notice::no pull request number; not posting the PR comment")
+    elif args.post:
         try:
             post(os.environ["GITHUB_REPOSITORY"], number, markdown, os.environ["GITHUB_TOKEN"], MARKER)
-        except (OSError, KeyError, ValueError) as e:  # HTTP and network errors are OSErrors; bad JSON is ValueError
-            print(f"::warning::could not post the PR comment: {e}")
+        except (OSError, KeyError, ValueError, http.client.HTTPException) as e:  # HTTP and network errors are OSErrors; bad JSON is ValueError
+            print(f"::warning::{escape_command(f'could not post the PR comment: {e}')}")
     return 0
 
 

@@ -9,6 +9,7 @@ GUIDE_URL = (
     "skills/productivity/clean-mode/SKILL.md"
 )
 WEAKEST_COUNT = 3
+MAX_UNSCORED_LISTED = 20
 
 
 @dataclass(frozen=True)
@@ -16,6 +17,10 @@ class ItemResult:
     label: str  # "PR description" or a file path in backticks
     raw: dict | None  # jev_core.score_text output; None when not scored
     note: str = ""  # why it was not scored
+
+
+def escape_cell(text):
+    return text.replace("|", "\\|")
 
 
 def ci_rubrics(config):
@@ -62,7 +67,7 @@ def render(config, results, too_large=(), over_limit=(), max_chars=0, max_files=
     scored = [r for r in results if r.raw is not None]
     if scored:
         lines += ["| Item | Score |", "|---|---|"]
-        lines += [f"| {r.label} | {overall(config, r.raw):.2f} |" for r in scored]
+        lines += [f"| {escape_cell(r.label)} | {overall(config, r.raw):.2f} |" for r in scored]
         lines.append("")
         for r in scored:
             lines += [f"### {r.label}: {overall(config, r.raw):.2f}", ""]
@@ -74,7 +79,9 @@ def render(config, results, too_large=(), over_limit=(), max_chars=0, max_files=
     unscored += [(f"`{p}`", f"over the {max_files}-file limit") for p in over_limit]
     if unscored:
         lines += ["### Not scored", ""]
-        lines += [f"- {label}: {note}" for label, note in unscored]
+        lines += [f"- {label}: {note}" for label, note in unscored[:MAX_UNSCORED_LISTED]]
+        if len(unscored) > MAX_UNSCORED_LISTED:
+            lines.append(f"- ...and {len(unscored) - MAX_UNSCORED_LISTED} more")
         lines.append("")
 
     if not scored and not unscored:
