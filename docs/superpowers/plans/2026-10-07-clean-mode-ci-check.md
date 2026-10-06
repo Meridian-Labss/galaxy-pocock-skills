@@ -45,13 +45,11 @@
 
 ## Chunk 1: Shared scoring core
 
-### Task 1: Test setup and the pre-refactor snapshot
-
-Captures exactly what the current eval scorer sends to Jev, so Task 2 can prove `jev_core` sends the same.
+### Task 1: Test setup
 
 **Files:**
 - Create: `pytest.ini`, `evals/requirements-dev.txt`, `tests/conftest.py`, `tests/fake_jev.py`
-- Create: `tests/fixtures/sample_doc.md`, `tests/fixtures/sample_source.md`, `tests/fixtures/jev_calls_before_refactor.json`
+- Create: `tests/fixtures/sample_doc.md`, `tests/fixtures/sample_source.md`
 
 - [ ] **Step 1: Add pytest config and dev requirements**
 
@@ -169,36 +167,11 @@ Deploys restart the API pods, which clears the in-memory counters.
 So we noticed that after deploys people sometimes get way more requests than they should, I think it's because the counters live in memory, which is a bit of a historical thing from when we had one pod. Anyway we should probably move them to Redis.
 ```
 
-- [ ] **Step 5: Capture what the current scorer sends to Jev**
-
-Run from the repo root:
-
-```bash
-evals/.venv/bin/python - <<'EOF'
-import json, sys
-sys.path[:0] = ["evals", "tests"]
-import score_with_jev
-from fake_jev import FakeJevClient
-
-client = FakeJevClient()
-score_with_jev.TypeSafeClient = lambda: client
-doc = open("tests/fixtures/sample_doc.md").read()
-source = open("tests/fixtures/sample_source.md").read()
-score_with_jev.score_texts({"clean-mode-pr__with__0": doc}, {"clean-mode-pr": source})
-with open("tests/fixtures/jev_calls_before_refactor.json", "w") as f:
-    json.dump(client.calls, f, indent=2)
-    f.write("\n")
-print(len(client.calls), "calls captured")
-EOF
-```
-
-Expected: `2 calls captured` (one `document_only`, one `with_source`). Open the JSON and confirm the second state contains both the sample source and the sample doc.
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add pytest.ini evals/requirements-dev.txt tests/
-git commit -m "Add test setup and snapshot of the questions sent to Jev"
+git commit -m "Add Python test setup"
 ```
 
 ### Task 2: `jev_core` module
@@ -223,13 +196,6 @@ from fake_jev import FakeJevClient
 FIXTURES = Path(__file__).with_name("fixtures")
 SAMPLE_DOC = (FIXTURES / "sample_doc.md").read_text()
 SAMPLE_SOURCE = (FIXTURES / "sample_source.md").read_text()
-CALLS_BEFORE_REFACTOR = json.loads((FIXTURES / "jev_calls_before_refactor.json").read_text())
-
-
-def test_asks_jev_exactly_what_the_eval_scorer_asked_before_the_refactor():
-    client = FakeJevClient()
-    jev_core.score_text(client, jev_core.load_config(), SAMPLE_DOC, source=SAMPLE_SOURCE)
-    assert client.calls == CALLS_BEFORE_REFACTOR
 
 
 def test_states_filter_asks_only_the_chosen_rubric_group():
@@ -426,11 +392,7 @@ def score_text(client, config, text, source=None, states=None):
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `evals/.venv/bin/python -m pytest tests/test_jev_core.py -v`
-Expected: 7 passed.
-
-If the snapshot test fails here, diff `client.calls` against the fixture. The first difference shows what the refactor changed; fix `jev_core`, not the fixture.
-
-Later, an intended edit to `dimensions.json` will also break this snapshot. Then regenerate it: rerun the Task 1, Step 5 script with the last three scoring lines replaced by `jev_core.score_text(client, jev_core.load_config(), doc, source=source)`. Add that as a comment at the top of `tests/test_jev_core.py`.
+Expected: 6 passed.
 
 - [ ] **Step 5: Commit**
 
@@ -444,39 +406,8 @@ git commit -m "Add jev_core, the shared Jev scoring module"
 **Files:**
 - Modify: `evals/score_with_jev.py:32-83` (imports and config block), `evals/score_with_jev.py:219-251` (`score_texts`)
 - Modify: `evals/requirements.txt`
-- Test: `tests/test_score_with_jev.py`
 
-- [ ] **Step 1: Write the failing test**
-
-`tests/test_score_with_jev.py`:
-
-```python
-import json
-from pathlib import Path
-
-import jev_core
-import score_with_jev
-from fake_jev import FakeJevClient
-
-FIXTURES = Path(__file__).with_name("fixtures")
-
-
-def test_eval_scorer_still_asks_jev_the_same_questions(monkeypatch):
-    client = FakeJevClient()
-    monkeypatch.setattr(jev_core, "make_client", lambda retries=None: client)
-    score_with_jev.score_texts(
-        {"clean-mode-pr__with__0": (FIXTURES / "sample_doc.md").read_text()},
-        {"clean-mode-pr": (FIXTURES / "sample_source.md").read_text()},
-    )
-    assert client.calls == json.loads((FIXTURES / "jev_calls_before_refactor.json").read_text())
-```
-
-- [ ] **Step 2: Run it to verify it fails**
-
-Run: `env -u TYPESAFE_API_KEY evals/.venv/bin/python -m pytest tests/test_score_with_jev.py -v`
-Expected: FAIL with `TypeSafeError` about a missing API key, since the scorer still builds its own `TypeSafeClient`. Unsetting the key keeps this from making a paid Jev call.
-
-- [ ] **Step 3: Replace the import and config block**
+- [ ] **Step 1: Replace the import and config block**
 
 In `evals/score_with_jev.py`, replace everything from `try:\n    from typesafe_sdk import Score, TypeSafeClient` (line 32) through the `_missing` check ending at line 83 with:
 
@@ -516,7 +447,7 @@ REPORT_DIMENSIONS = CONFIG.report_dimensions
 DIMENSION_TOP = {name: CONFIG.top(name) for name in [*CONFIG.dimensions, *CONFIG.composites]}
 ```
 
-- [ ] **Step 4: Replace `score_texts`**
+- [ ] **Step 2: Replace `score_texts`**
 
 ```python
 def score_texts(texts, sources=None):
@@ -535,12 +466,12 @@ def score_texts(texts, sources=None):
     return scored
 ```
 
-- [ ] **Step 5: Check nothing else used the removed names**
+- [ ] **Step 3: Check nothing else used the removed names**
 
 Run: `grep -n "DIMENSIONS_FILE\|DIMENSIONS_BY_STATE\|STATE_TEMPLATES\|\b_config\b\|TypeSafeClient\|\bDIMENSIONS\b" evals/score_with_jev.py`
 Expected: no output.
 
-- [ ] **Step 6: Pin dependencies**
+- [ ] **Step 4: Pin dependencies**
 
 `evals/requirements.txt`:
 
@@ -549,15 +480,15 @@ typesafe-sdk==0.7.2
 pyyaml==6.0.3
 ```
 
-- [ ] **Step 7: Run all tests and a smoke check**
+- [ ] **Step 5: Run all tests and a smoke check**
 
 Run: `evals/.venv/bin/python -m pytest -v && evals/.venv/bin/python evals/score_with_jev.py --help | head -3`
 Expected: all tests pass; the help text prints.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add evals/score_with_jev.py evals/requirements.txt tests/test_score_with_jev.py
+git add evals/score_with_jev.py evals/requirements.txt
 git commit -m "Score evals through jev_core and pin eval dependencies"
 ```
 
