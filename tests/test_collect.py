@@ -46,3 +46,17 @@ def test_select_ranks_by_lines_changed_and_applies_limits(tmp_path):
     assert picked.too_large == ["huge.md"]
     assert picked.over_limit == ["a.md"]
     assert picked.to_score[0][1] == "x" * 10
+
+
+def test_select_skips_paths_with_control_characters(tmp_path):
+    (tmp_path / "ok.md").write_text("x")
+    docs = [ChangedDoc("ok.md", 5), ChangedDoc("bad\nname.md", 50), ChangedDoc("bell\x07.md", 40)]
+
+    picked = select(docs, ["**/*.md"], min_lines=3, max_files=10, max_chars=100, root=tmp_path)
+
+    assert [path for path, _ in picked.to_score] == ["ok.md"]
+    assert picked.too_large == [] and picked.over_limit == []
+
+
+def test_matching_is_case_sensitive():
+    assert not matches("README.MD", ["**/*.md"])

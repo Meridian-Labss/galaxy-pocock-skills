@@ -25,6 +25,12 @@ def test_updates_the_marked_comment_even_on_a_later_page():
     assert github.calls[-1] == ("PATCH", f"{ISSUES}/comments/7", {"body": "new"})
 
 
+def test_ignores_comments_that_only_mention_the_marker():
+    github = FakeGitHub([[{"id": 1, "body": f"quoting {MARKER} here"}]])
+    upsert_comment("o/r", 5, "new", "token", MARKER, request=github)
+    assert github.calls[-1][0] == "POST"
+
+
 def test_creates_a_comment_when_none_is_marked():
     github = FakeGitHub([[{"id": 1, "body": None}]])
     upsert_comment("o/r", 5, "new", "token", MARKER, request=github)
