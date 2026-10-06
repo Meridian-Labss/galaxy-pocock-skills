@@ -31,16 +31,16 @@ from pathlib import Path
 
 try:
     import jev_core
-except ImportError:
-    sys.exit("typesafe-sdk is not installed. Run: pip install typesafe-sdk")
+except ImportError as e:
+    sys.exit(f"could not import jev_core ({e}). Run: pip install -r evals/requirements.txt")
 
 # The questions live in dimensions.json next to this script and are loaded by
 # jev_core, which the clean-mode CI check shares, so both ask Jev identical
 # questions. Scannability isn't one snap judgment: it depends on independent
 # factors, so each gets its own atomic question per Jev's guidance, combined
 # by jev_core.score_text. The composite is the MEAN of its factors: a min()
-# was tried first and collapsed the composite to section_scannability alone
-# (uniformly the lowest factor for both arms), masking the other factors.
+# was tried first and collapsed the composite to one factor (the same factor
+# was lowest for both arms), masking the other factors.
 #
 # Some questions need the source material the document was written from, which
 # means a second Jev call against a different state. They are kept as separate
