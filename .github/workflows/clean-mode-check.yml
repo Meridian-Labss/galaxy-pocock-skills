@@ -1,0 +1,22 @@
+name: Clean-mode check
+
+on: pull_request
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: clean-mode-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  clean-mode:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/clean-mode-check
+        with:
+          typesafe-api-key: ${{ secrets.TYPESAFE_API_KEY }}
