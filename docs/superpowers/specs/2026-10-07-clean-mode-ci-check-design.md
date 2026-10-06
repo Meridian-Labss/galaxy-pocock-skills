@@ -126,7 +126,6 @@ The `pull_request` trigger is used, not `pull_request_target`, so code from a PR
 
 ## Testing
 
-- Refactor safety: before extracting `jev_core.py`, save the questions and input text `score_with_jev.py` builds for a fixed sample. Assert `jev_core.py` builds identical ones. No API key needed.
 - CLI unit tests: pytest with a fake Jev client. Cover:
   - collection: include filter, `min-lines`, size and file caps, deletions ignored, renames with edits included
   - rendering: composites expanded, weakest chosen and tie-broken correctly, level text shown, "not scored", "could not score" and "no description" rows, marker present
