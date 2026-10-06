@@ -1,0 +1,56 @@
+name: Clean-mode check
+description: Score a pull request's prose against clean-mode with Jev and post one advisory comment.
+inputs:
+  typesafe-api-key:
+    description: TypeSafe API key. If empty, the check skips.
+    required: false
+    default: ""
+  github-token:
+    description: Token used to post the PR comment.
+    required: false
+    default: ${{ github.token }}
+  include:
+    description: Comma-separated globs of files to score. Add **/*.mdx to opt in.
+    required: false
+    default: "**/*.md"
+  max-files:
+    description: Most docs to score, ranked by lines changed.
+    required: false
+    default: "10"
+  max-chars:
+    description: Docs longer than this are skipped, not truncated.
+    required: false
+    default: "30000"
+  min-lines:
+    description: Docs with fewer lines changed are not scored.
+    required: false
+    default: "3"
+runs:
+  using: composite
+  steps:
+    # update-environment: false leaves the consumer's own Python on PATH
+    - id: py
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+        update-environment: false
+    - name: Install dependencies
+      shell: bash
+      env:
+        PYTHON: ${{ steps.py.outputs.python-path }}
+      run: |
+        "$PYTHON" -m venv "$RUNNER_TEMP/clean-mode-venv"
+        "$RUNNER_TEMP/clean-mode-venv/bin/python" -m pip install --quiet -r "$GITHUB_ACTION_PATH/../../../evals/requirements.txt"
+    - name: Score prose
+      shell: bash
+      env:
+        TYPESAFE_API_KEY: ${{ inputs.typesafe-api-key }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        INCLUDE: ${{ inputs.include }}
+        MAX_FILES: ${{ inputs.max-files }}
+        MAX_CHARS: ${{ inputs.max-chars }}
+        MIN_LINES: ${{ inputs.min-lines }}
+      run: >
+        "$RUNNER_TEMP/clean-mode-venv/bin/python" "$GITHUB_ACTION_PATH/../../../ci/clean_mode_check.py" --post
+        --include "$INCLUDE" --max-files "$MAX_FILES"
+        --max-chars "$MAX_CHARS" --min-lines "$MIN_LINES"
