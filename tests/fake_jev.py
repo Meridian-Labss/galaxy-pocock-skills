@@ -10,10 +10,11 @@ class FakeJevClient:
     Raises TypeSafeError for any call whose state contains `fail_on`.
     """
 
-    def __init__(self, level=3, levels=None, fail_on=None):
+    def __init__(self, level=3, levels=None, fail_on=None, error_message="fake outage"):
         self.level = level
         self.levels = levels or {}
         self.fail_on = fail_on
+        self.error_message = error_message
         self.calls = []
 
     def __enter__(self):
@@ -31,7 +32,7 @@ class FakeJevClient:
             },
         })
         if self.fail_on and self.fail_on in state:
-            raise TypeSafeError("fake outage")
+            raise TypeSafeError(self.error_message)
         return SimpleNamespace(answers={
             name: _answer(self.levels.get(name, self.level)) for name in questions
         })

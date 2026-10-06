@@ -115,7 +115,7 @@ def main(argv=None, client=None, post=upsert_comment):
     elif args.post:
         try:
             post(os.environ["GITHUB_REPOSITORY"], number, markdown, os.environ["GITHUB_TOKEN"], MARKER)
-        except (OSError, KeyError, ValueError, http.client.HTTPException) as e:  # HTTP and network errors are OSErrors; bad JSON is ValueError
+        except (OSError, KeyError, ValueError, http.client.HTTPException) as e:  # HTTP and network errors are OSErrors; bad JSON is ValueError; truncated responses raise HTTPException
             print(f"::warning::{escape_command(f'could not post the PR comment: {e}')}")
     return 0
 

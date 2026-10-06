@@ -146,3 +146,41 @@ def test_missing_pr_number_skips_posting(pr):
 
 def test_escape_command_encodes_workflow_command_characters():
     assert clean_mode_check.escape_command("a%b\r\nc") == "a%25b%0D%0Ac"
+
+
+def test_diffs_the_pr_head_not_the_checked_out_commit(pr, repo, capsys):
+    base = json.loads(pr["event"].read_text())["pull_request"]["base"]["sha"]
+    # Rebuild from the base: a PR branch with pr-doc.md, and a main-only doc.
+    git(repo, "checkout", "-q", "-b", "pr-branch", base)
+    (repo / "pr-doc.md").write_text("# PR\n\nalpha\nbeta\ngamma\n")
+    git(repo, "add", "pr-doc.md")
+    git(repo, "commit", "-qm", "pr change")
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True,
+                          text=True, check=True).stdout.strip()
+    git(repo, "checkout", "-q", "-b", "other-main", base)
+    (repo / "main-only.md").write_text("# Main\n\nmain one\nmain two\nmain three\n")
+    git(repo, "add", "main-only.md")
+    git(repo, "commit", "-qm", "main only")
+    # Stale checkout: HEAD is the main-only commit, but the PR file is in the tree.
+    git(repo, "checkout", "pr-branch", "--", "pr-doc.md")
+
+    event = json.loads(pr["event"].read_text())
+    event["pull_request"]["head"] = {"sha": head}
+    pr["event"].write_text(json.dumps(event))
+    client, post = FakeJevClient(), RecordingPost()
+
+    assert run(pr, client, post) == 0
+
+    states = "\n".join(call["state"] for call in client.calls)
+    assert "alpha" in states and "main one" not in states
+    body = post.calls[0][2]
+    assert "`pr-doc.md`" in body and "main-only.md" not in body
+
+
+def test_failure_text_with_newlines_cannot_inject_workflow_commands(pr, capsys):
+    client = FakeJevClient(fail_on="alpha", error_message="boom\n::error::injected")
+    assert run(pr, client, RecordingPost()) == 0
+    lines = capsys.readouterr().out.splitlines()
+    warning = next(l for l in lines if l.startswith("::warning::"))
+    assert not any(l.startswith("::error::") for l in lines)
+    assert "boom%0A::error::injected" in warning
