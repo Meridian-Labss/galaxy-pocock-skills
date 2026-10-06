@@ -30,40 +30,28 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 try:
-    from typesafe_sdk import Score, TypeSafeClient
+    import jev_core
 except ImportError:
     sys.exit("typesafe-sdk is not installed. Run: pip install typesafe-sdk")
 
-# The questions live in dimensions.json next to this script: one entry per
-# Jev Score question (instructions + ordered worst-to-best criteria levels),
-# plus which factors compose "scannability" and which dimensions the report
-# shows. Scannability isn't one snap judgment - it depends on independent
+# The questions live in dimensions.json next to this script and are loaded by
+# jev_core, which the clean-mode CI check shares, so both ask Jev identical
+# questions. Scannability isn't one snap judgment: it depends on independent
 # factors, so each gets its own atomic question per Jev's guidance, combined
-# in code by score_texts(). The composite is the MEAN of its factors: a min()
+# by jev_core.score_text. The composite is the MEAN of its factors: a min()
 # was tried first and collapsed the composite to section_scannability alone
 # (uniformly the lowest factor for both arms), masking the other factors.
-DIMENSIONS_FILE = Path(__file__).with_name("dimensions.json")
-_config = json.loads(DIMENSIONS_FILE.read_text())
-
+#
 # Some questions need the source material the document was written from, which
 # means a second Jev call against a different state. They are kept as separate
 # calls on purpose: the sources are deliberately unedited prose, and a judge
 # that has just read one anchors on it when scoring the document's register.
-STATE_TEMPLATES = _config.get("state", {"document_only": "{document}"})
-DIMENSIONS_BY_STATE = {}
-for _name, _d in _config["dimensions"].items():
-    _state = _d.get("state", "document_only")
-    if _state not in STATE_TEMPLATES:
-        sys.exit(f"{DIMENSIONS_FILE}: dimension {_name} wants unknown state {_state!r}")
-    DIMENSIONS_BY_STATE.setdefault(_state, {})[_name] = Score(
-        instructions=_d["instructions"], criteria=_d["criteria"]
-    )
-DIMENSIONS = {n: q for qs in DIMENSIONS_BY_STATE.values() for n, q in qs.items()}
-# A composite is a report row with no question of its own: it is the mean of
-# its factors, each normalised by its own ladder first. Factors stay out of
-# report_dimensions and are listed under their composite instead.
-COMPOSITES = {name: tuple(factors) for name, factors in _config.get("composites", {}).items()}
-REPORT_DIMENSIONS = list(_config["report_dimensions"])
+try:
+    CONFIG = jev_core.load_config()
+except jev_core.ConfigError as e:
+    sys.exit(str(e))
+COMPOSITES = CONFIG.composites
+REPORT_DIMENSIONS = CONFIG.report_dimensions
 
 # A Jev score is a position on the dimension's own criteria ladder, so its
 # range is set by how many levels that dimension defines: 0-2 for a 3-level
@@ -71,16 +59,9 @@ REPORT_DIMENSIONS = list(_config["report_dimensions"])
 # everywhere (--out keeps them, so a score still maps onto its criterion
 # text); the report divides by the dimension's top level and prints a 0-1
 # fraction, so columns built from different ladders are comparable and a
-# delta between two of them carries no unit to misread.
-DIMENSION_TOP = {name: len(d["criteria"]) - 1 for name, d in _config["dimensions"].items()}
-# A composite is already built from normalised factors, so its own ladder is
-# 0-1 and the report's division by the top level is a no-op.
-for _name in COMPOSITES:
-    DIMENSION_TOP[_name] = 1
-
-_missing = [d for d in REPORT_DIMENSIONS if d not in DIMENSION_TOP]
-if _missing:
-    sys.exit(f"{DIMENSIONS_FILE}: report_dimensions names nothing: {', '.join(_missing)}")
+# delta between two of them carries no unit to misread. A composite is
+# already 0-1, so its top level is 1.
+DIMENSION_TOP = {name: CONFIG.top(name) for name in [*CONFIG.dimensions, *CONFIG.composites]}
 
 
 def run_eval(case_glob, runs, plugin_root):
@@ -221,35 +202,12 @@ def score_texts(texts, sources=None):
     sources = sources or {}
     skipped = set()
     scored = {}
-    with TypeSafeClient() as client:
+    with jev_core.make_client() as client:
         for key, text in texts.items():
             case = key.rsplit("__", 2)[0]
-            raw = {}
-            for state, questions in DIMENSIONS_BY_STATE.items():
-                template = STATE_TEMPLATES[state]
-                if "{source}" in template and case not in sources:
-                    skipped.add(case)
-                    continue
-                response = client.system_one(
-                    state=template.format(document=text, source=sources.get(case, "")),
-                    questions=questions,
-                )
-                raw.update({
-                    qid: {
-                        "score": ans.score,
-                        "confidence": ans.confidence,
-                        "probabilities": {str(k): v for k, v in ans.probabilities.items()},
-                    }
-                    for qid, ans in response.answers.items()
-                })
-            for name, factors in COMPOSITES.items():
-                parts = [raw[f]["score"] / DIMENSION_TOP[f] for f in factors]
-                confidences = [raw[f]["confidence"] for f in factors]
-                raw[name] = {
-                    "score": sum(parts) / len(parts),
-                    "confidence": sum(confidences) / len(confidences),
-                }
-            scored[key] = raw
+            if case not in sources:
+                skipped.add(case)
+            scored[key] = jev_core.score_text(client, CONFIG, text, source=sources.get(case))
     for case in sorted(skipped):
         print(f"warning: no source found for {case}; its with_source dimensions were not scored",
               file=sys.stderr)
