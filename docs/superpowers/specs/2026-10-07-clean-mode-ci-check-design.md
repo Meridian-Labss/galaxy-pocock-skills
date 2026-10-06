@@ -18,6 +18,7 @@ Out of scope, planned as a separate project: code comments. The current rubrics 
 ```yaml
 on: pull_request
 permissions:
+  contents: read
   pull-requests: write
 concurrency:
   group: clean-mode-${{ github.event.pull_request.number }}
