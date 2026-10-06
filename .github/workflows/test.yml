@@ -13,6 +13,9 @@ on:
       - ".github/actions/**"
       - ".github/workflows/test.yml"
 
+permissions:
+  contents: read
+
 jobs:
   pytest:
     runs-on: ubuntu-latest
