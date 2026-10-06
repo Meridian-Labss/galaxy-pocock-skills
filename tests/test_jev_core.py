@@ -59,3 +59,10 @@ def test_report_dimension_with_no_rubric_is_a_config_error(tmp_path):
 
 def test_state_of_a_composite_is_its_factors_state():
     assert jev_core.load_config().state_of("concision") == jev_core.DOCUMENT_ONLY
+
+
+def test_make_client_can_turn_retries_off(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(jev_core, "TypeSafeClient", lambda **kwargs: seen.update(kwargs))
+    jev_core.make_client(retries=0)
+    assert seen["retry"].max_retries == 0
