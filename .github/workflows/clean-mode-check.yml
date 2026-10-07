@@ -12,33 +12,44 @@ permissions:
   contents: read
   pull-requests: write
 
+# Two jobs, because GitHub downloads every action a job uses before checking
+# any step's condition, and the two triggers need different copies of the action.
 jobs:
-  clean-mode:
-    # Comment runs get secrets even on pull requests from forks, so only
-    # people with write access can trigger one.
-    if: >-
-      github.event_name == 'pull_request' ||
-      (github.event.issue.pull_request &&
-       contains(github.event.comment.body, '@clean-mode') &&
-       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
-    # Set on the job, not the workflow, so unrelated comments never cancel a run.
+  on-pull-request:
+    if: github.event_name == 'pull_request'
     concurrency:
-      group: clean-mode-${{ github.event.pull_request.number || github.event.issue.number }}
+      group: clean-mode-${{ github.event.pull_request.number }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # A comment run starts on the default branch; check out the pull request instead.
-          ref: ${{ github.event_name == 'issue_comment' && format('refs/pull/{0}/merge', github.event.issue.number) || '' }}
-      - if: github.event_name == 'pull_request'
-        uses: ./.github/actions/clean-mode-check
+      # Fork pull requests get no secrets, so running this pull request's own
+      # copy of the action is safe, and lets the action test its own changes.
+      - uses: ./.github/actions/clean-mode-check
         with:
           typesafe-api-key: ${{ secrets.TYPESAFE_API_KEY }}
-      # A comment run has secrets, so it must not run the pull request's own
-      # copy of the action. Use the copy on main instead.
-      - if: github.event_name == 'issue_comment'
-        uses: Meridian-Labss/galaxy-pocock-skills/.github/actions/clean-mode-check@main
+
+  on-comment:
+    # Comment runs get secrets even on pull requests from forks, so only
+    # people with write access can trigger one.
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '@clean-mode') &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    concurrency:
+      group: clean-mode-${{ github.event.issue.number }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      # A comment run starts on the default branch; check out the pull request instead.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refs/pull/${{ github.event.issue.number }}/merge
+      # With secrets in play, never run the pull request's own copy of the action.
+      - uses: Meridian-Labss/galaxy-pocock-skills/.github/actions/clean-mode-check@main
         with:
           typesafe-api-key: ${{ secrets.TYPESAFE_API_KEY }}
