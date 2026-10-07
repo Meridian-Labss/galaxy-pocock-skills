@@ -43,7 +43,7 @@ jobs:
 | `github-token` | `${{ github.token }}` | Used to post the comment |
 | `include` | `**/*.md` | Comma-separated globs of files to score. Add `**/*.mdx` to opt in; rubrics are untested on MDX |
 | `max-files` | `10` | Docs ranked by lines changed (additions plus deletions); the rest are listed as "not scored" |
-| `max-chars` | `30000` | Larger files are skipped with a note, not truncated, since a cut-off document scores badly for the wrong reason |
+| `max-chars` | `75000` | Larger files are skipped with a note, not truncated, since a cut-off document scores badly for the wrong reason. Sized to Jev's 32k-token limit on the document plus its longest question, at a worst case of 2.5 characters per token |
 | `min-lines` | `3` | Docs with fewer lines changed (typo fixes) are not scored |
 
 No outputs. Results go to the PR comment and the job summary page.

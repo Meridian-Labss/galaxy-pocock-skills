@@ -36,7 +36,7 @@ Keep `contents: read`: listing any permission sets the rest to none, and checkou
 | `github-token` | `${{ github.token }}` | Posts the comment. |
 | `include` | `**/*.md` | Comma-separated globs of files to score. Case-sensitive; `*` also matches across `/`. Add `**/*.mdx` to opt in (rubrics are untested on MDX). |
 | `max-files` | `10` | Most docs to score, ranked by lines changed. |
-| `max-chars` | `30000` | Longer docs are skipped, not truncated. |
+| `max-chars` | `75000` | Longer docs are skipped, not truncated. The default keeps each doc inside Jev's 32k-token limit. |
 | `min-lines` | `3` | Docs with fewer lines changed are not scored. |
 
 ## Limits

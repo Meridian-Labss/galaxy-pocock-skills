@@ -25,6 +25,10 @@ from post_comment import upsert_comment  # noqa: E402
 from render import MARKER, ItemResult, render  # noqa: E402
 
 PR_LABEL = "PR description"
+# Jev accepts at most 32k tokens for the document plus its longest question
+# (about 400 tokens today). At a worst case of 2.5 characters per token
+# (code-heavy Markdown), 75,000 characters is about 30k tokens, leaving room.
+DEFAULT_MAX_CHARS = 75000
 
 
 def escape_command(text):
@@ -40,7 +44,7 @@ def parse_args(argv):
     parser.add_argument("--event-path", default=os.environ.get("GITHUB_EVENT_PATH"))
     parser.add_argument("--include", default="**/*.md", help="comma-separated globs of files to score")
     parser.add_argument("--max-files", type=int, default=10)
-    parser.add_argument("--max-chars", type=int, default=30000)
+    parser.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
     parser.add_argument("--min-lines", type=int, default=3)
     parser.add_argument("--post", action="store_true", help="create or update the PR comment")
     return parser.parse_args(argv)

@@ -20,7 +20,7 @@ inputs:
   max-chars:
     description: Docs longer than this are skipped, not truncated.
     required: false
-    default: "30000"
+    default: "75000"
   min-lines:
     description: Docs with fewer lines changed are not scored.
     required: false
