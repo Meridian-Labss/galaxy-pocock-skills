@@ -67,3 +67,32 @@ def test_render_caps_the_not_scored_list():
     assert "- `f19.md`: over the 1-file limit" in md
     assert "`f20.md`" not in md
     assert "- ...and 5 more" in md
+
+
+def test_table_lists_worst_first_with_weakest_rubrics_inline():
+    md = render(CONFIG, [
+        ItemResult("`good.md`", scores()),
+        ItemResult("`bad.md`", scores(levels={"padding": 0, "economy": 1})),
+    ])
+    assert md.index("`bad.md`") < md.index("`good.md`")
+    assert "| `bad.md` | 0.86 | `padding` 0.00, `economy` 0.33 |" in md
+
+
+def test_perfect_item_has_no_weakest_rubrics():
+    assert "| `good.md` | 1.00 | none |" in render(CONFIG, [ItemResult("`good.md`", scores())])
+
+
+def test_each_level_description_appears_once_in_a_collapsed_block():
+    padding_text = CONFIG.dimensions["padding"]["criteria"][0]
+    md = render(CONFIG, [
+        ItemResult("`a.md`", scores(levels={"padding": 0})),
+        ItemResult("`b.md`", scores(levels={"padding": 0})),
+    ])
+    assert md.count(padding_text) == 1
+    details = md[md.index("<details>"):md.index("</details>")]
+    assert f"- `padding`: {padding_text} (`a.md`, `b.md`)" in details
+
+
+def test_no_per_item_sections():
+    md = render(CONFIG, [ItemResult("`a.md`", scores(levels={"padding": 0}))])
+    assert "### `a.md`" not in md

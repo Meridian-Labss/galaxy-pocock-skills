@@ -104,14 +104,14 @@ Each rubric's score is normalized to 0 to 1 by its top level. An item's overall 
 
 ### Comment format
 
-For each item:
+One table, one row per item, lowest score first:
 
 - overall score
-- the 3 weakest single rubrics (composites expanded into their parts), ties broken by order in `dimensions.json`
-- for each, the text of the rubric level Jev chose, so the author sees why
-- a link to clean-mode's `SKILL.md`
+- the up to 3 weakest single rubrics below full marks, with scores (composites expanded into their parts; ties broken by order in `dimensions.json`)
 
-The comment states that scores cover the whole file, not just the PR's changes.
+Below it, a collapsed block explains the weak rubrics. Each rubric level Jev chose appears once, followed by the items it applies to.
+
+The comment links to clean-mode's `SKILL.md` and states that scores cover the whole file, not just the PR's changes.
 
 ## Failure handling
 

@@ -41,18 +41,28 @@ def level_text(config, name, answer):
 
 
 def weakest(config, raw, count=WEAKEST_COUNT):
-    """Lowest-scoring single rubrics as (name, 0-1 score, level text).
+    """Lowest-scoring single rubrics below full marks, as (name, 0-1 score, level text).
 
     Composites are replaced by their factors, since only single rubrics have
     level text. Ties go to the rubric listed first in dimensions.json.
     """
     file_order = list(config.dimensions)
     single = [f for d in ci_rubrics(config) for f in config.composites.get(d, (d,))]
+    single = [n for n in single if config.normalized(n, raw[n]["score"]) < 1]
     single.sort(key=lambda n: (config.normalized(n, raw[n]["score"]), file_order.index(n)))
     return [
         (n, config.normalized(n, raw[n]["score"]), level_text(config, n, raw[n]))
         for n in single[:count]
     ]
+
+
+def explanations(config, scored):
+    """Each weak rubric's level text once, with the items it applies to, worst items first."""
+    grouped = {}
+    for r in scored:
+        for name, _, text in weakest(config, r.raw):
+            grouped.setdefault((name, text), []).append(r.label)
+    return grouped
 
 
 def render(config, results, too_large=(), over_limit=(), max_chars=0, max_files=0):
@@ -64,15 +74,21 @@ def render(config, results, too_large=(), over_limit=(), max_chars=0, max_files=
         f"Scores run from 0 to 1. See the [clean-mode guide]({GUIDE_URL}).",
         "",
     ]
-    scored = [r for r in results if r.raw is not None]
+    scored = sorted((r for r in results if r.raw is not None), key=lambda r: overall(config, r.raw))
     if scored:
-        lines += ["| Item | Score |", "|---|---|"]
-        lines += [f"| {escape_cell(r.label)} | {overall(config, r.raw):.2f} |" for r in scored]
-        lines.append("")
+        lines += ["| Item | Score | Weakest |", "|---|---|---|"]
         for r in scored:
-            lines += [f"### {r.label}: {overall(config, r.raw):.2f}", ""]
-            lines += [f"- `{n}` ({s:.2f}): {text}" for n, s, text in weakest(config, r.raw)]
-            lines.append("")
+            weak = ", ".join(f"`{n}` {s:.2f}" for n, s, _ in weakest(config, r.raw)) or "none"
+            lines.append(f"| {escape_cell(r.label)} | {overall(config, r.raw):.2f} | {weak} |")
+        lines.append("")
+        grouped = explanations(config, scored)
+        if grouped:
+            lines += ["<details><summary>What the weakest rubrics mean</summary>", ""]
+            lines += [
+                f"- `{name}`: {text} ({', '.join(labels)})"
+                for (name, text), labels in grouped.items()
+            ]
+            lines += ["", "</details>", ""]
 
     unscored = [(r.label, r.note) for r in results if r.raw is None]
     unscored += [(f"`{p}`", f"over {max_chars:,} characters") for p in too_large]
