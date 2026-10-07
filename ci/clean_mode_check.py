@@ -15,6 +15,7 @@ import json
 import os
 import subprocess
 import sys
+import urllib.parse
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "evals"))
@@ -52,6 +53,14 @@ def parse_args(argv):
     parser.add_argument("--min-lines", type=int, default=3)
     parser.add_argument("--post", action="store_true", help="create or update the PR comment")
     return parser.parse_args(argv)
+
+
+def file_label(path, head):
+    """The file's path, linked to that file at the pull request's head commit when known."""
+    repo = os.environ.get("GITHUB_REPOSITORY")
+    if not repo or head == "HEAD":
+        return f"`{path}`"
+    return f"[`{path}`](https://github.com/{repo}/blob/{head}/{urllib.parse.quote(path)})"
 
 
 def read_pr(args, pr):
@@ -121,7 +130,7 @@ def main(argv=None, client=None, post=upsert_comment, fetch=fetch_pull_request):
         return 1
     selection = select(docs, patterns, args.min_lines, args.max_files, args.max_chars)
 
-    items = [(f"`{path}`", text) for path, text in selection.to_score]
+    items = [(file_label(path, head), text) for path, text in selection.to_score]
     unscored = []
     if body.strip():
         items.insert(0, (PR_LABEL, f"# {title}\n\n{body}" if title else body))
