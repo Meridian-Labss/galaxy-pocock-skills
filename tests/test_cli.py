@@ -226,3 +226,20 @@ def test_failed_pr_lookup_warns_and_exits_zero(pr, capsys):
     ) == 0
     assert client.calls == [] and post.calls == []
     assert "::warning::could not look up the pull request: 502" in capsys.readouterr().out
+
+
+def test_file_labels_link_to_the_file_at_the_pr_head(pr):
+    head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    event = json.loads(pr["event"].read_text())
+    event["pull_request"]["head"] = {"sha": head}
+    pr["event"].write_text(json.dumps(event))
+
+    post = RecordingPost()
+    assert run(pr, FakeJevClient(), post) == 0
+    assert f"[`keep.md`](https://github.com/o/r/blob/{head}/keep.md)" in post.calls[0][2]
+
+
+def test_file_labels_stay_plain_without_a_head_commit(pr):
+    post = RecordingPost()
+    assert run(pr, FakeJevClient(), post) == 0
+    assert "| `keep.md` |" in post.calls[0][2]
