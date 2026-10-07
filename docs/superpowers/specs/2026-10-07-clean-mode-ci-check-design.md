@@ -125,7 +125,15 @@ The comment links to clean-mode's `SKILL.md` and states that scores cover the wh
 
 ## Security
 
-The action runs on the `pull_request` trigger, not `pull_request_target`, so code from a pull request never runs with secrets. As a result, pull requests from forks are not scored.
+The action runs on the `pull_request` trigger, not `pull_request_target`, so code from a pull request never runs with secrets. As a result, pull requests from forks are not scored automatically.
+
+A comment containing `@clean-mode` also triggers a run. Comment runs get secrets, even on pull requests from forks, so:
+
+- only comments from people with write access (owner, member, collaborator) trigger one
+- the run uses the action's code from a pinned ref (`@v1`, or `@main` in this repo), never the pull request's copy
+- the pull request's files are only read as text, never run
+
+A comment event carries only the issue number, so the command looks up the pull request's details through the GitHub API.
 
 ## Testing
 

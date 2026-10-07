@@ -1,4 +1,4 @@
-from post_comment import upsert_comment
+from post_comment import fetch_pull_request, upsert_comment
 
 MARKER = "<!-- m -->"
 ISSUES = "https://api.github.com/repos/o/r/issues"
@@ -35,3 +35,14 @@ def test_creates_a_comment_when_none_is_marked():
     github = FakeGitHub([[{"id": 1, "body": None}]])
     upsert_comment("o/r", 5, "new", "token", MARKER, request=github)
     assert github.calls[-1] == ("POST", f"{ISSUES}/5/comments", {"body": "new"})
+
+
+def test_fetch_pull_request_reads_the_pulls_endpoint():
+    calls = []
+
+    def request(method, url, token, body=None):
+        calls.append((method, url, token))
+        return {"number": 5}
+
+    assert fetch_pull_request("o/r", 5, "token", request=request) == {"number": 5}
+    assert calls == [("GET", "https://api.github.com/repos/o/r/pulls/5", "token")]
