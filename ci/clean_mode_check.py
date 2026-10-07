@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "evals"))
 
 import jev_core  # noqa: E402
 from collect import changed_docs, select  # noqa: E402
-from post_comment import upsert_comment  # noqa: E402
+from post_comment import fetch_pull_request, upsert_comment  # noqa: E402
 from render import MARKER, ItemResult, render  # noqa: E402
 
 PR_LABEL = "PR description"
@@ -29,6 +29,10 @@ PR_LABEL = "PR description"
 # (about 400 tokens today). At a worst case of 2.5 characters per token
 # (code-heavy Markdown), 75,000 characters is about 30k tokens, leaving room.
 DEFAULT_MAX_CHARS = 75000
+# What a failed GitHub API call can raise: HTTP and network errors are OSErrors,
+# bad JSON is ValueError, truncated responses raise HTTPException, and a
+# missing GITHUB_REPOSITORY or GITHUB_TOKEN is KeyError.
+GITHUB_ERRORS = (OSError, KeyError, ValueError, http.client.HTTPException)
 
 
 def escape_command(text):
@@ -50,11 +54,8 @@ def parse_args(argv):
     return parser.parse_args(argv)
 
 
-def read_pr(args):
-    """(base, head, title, body, number), from the event payload unless flags override."""
-    pr = {}
-    if args.event_path and Path(args.event_path).exists():
-        pr = json.loads(Path(args.event_path).read_text(encoding="utf-8")).get("pull_request", {})
+def read_pr(args, pr):
+    """(base, head, title, body, number), from the pull request's details unless flags override."""
     base = args.base or pr.get("base", {}).get("sha")
     head = pr.get("head", {}).get("sha") or "HEAD"
     title = args.pr_title if args.pr_title is not None else (pr.get("title") or "")
@@ -63,6 +64,23 @@ def read_pr(args):
         if args.pr_body_file else (pr.get("body") or "")
     )
     return base, head, title, body, pr.get("number")
+
+
+def load_pr(args, fetch):
+    """The pull request's details from the event payload.
+
+    A pull_request event carries them. A comment event (issue_comment) carries
+    only the number, so the details are fetched from the GitHub API.
+    """
+    if not (args.event_path and Path(args.event_path).exists()):
+        return {}
+    event = json.loads(Path(args.event_path).read_text(encoding="utf-8"))
+    if "pull_request" in event:
+        return event["pull_request"]
+    issue = event.get("issue") or {}
+    if "pull_request" not in issue:
+        return {}
+    return fetch(os.environ["GITHUB_REPOSITORY"], issue["number"], os.environ["GITHUB_TOKEN"])
 
 
 def score_items(client, config, items):
@@ -78,16 +96,21 @@ def score_items(client, config, items):
     return results
 
 
-def main(argv=None, client=None, post=upsert_comment):
+def main(argv=None, client=None, post=upsert_comment, fetch=fetch_pull_request):
     args = parse_args(argv)
     config = jev_core.load_config()
     if not os.environ.get("TYPESAFE_API_KEY"):
         print("::notice::TYPESAFE_API_KEY is not set (normal for PRs from forks); skipping the clean-mode check")
         return 0
 
-    base, head, title, body, number = read_pr(args)
+    try:
+        pr = load_pr(args, fetch)
+    except GITHUB_ERRORS as e:
+        print(f"::warning::{escape_command(f'could not look up the pull request: {e}')}")
+        return 0
+    base, head, title, body, number = read_pr(args, pr)
     if not base:
-        print("::notice::no base commit (pass --base or run on a pull_request event); skipping the clean-mode check")
+        print("::notice::no base commit (pass --base, or run on a pull request or a comment on one); skipping the clean-mode check")
         return 0
     patterns = [p.strip() for p in args.include.split(",") if p.strip()]
     try:
@@ -119,7 +142,7 @@ def main(argv=None, client=None, post=upsert_comment):
     elif args.post:
         try:
             post(os.environ["GITHUB_REPOSITORY"], number, markdown, os.environ["GITHUB_TOKEN"], MARKER)
-        except (OSError, KeyError, ValueError, http.client.HTTPException) as e:  # HTTP and network errors are OSErrors; bad JSON is ValueError; truncated responses raise HTTPException
+        except GITHUB_ERRORS as e:
             print(f"::warning::{escape_command(f'could not post the PR comment: {e}')}")
     return 0
 

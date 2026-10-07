@@ -1,4 +1,4 @@
-"""Create or update the single clean-mode comment on a pull request."""
+"""GitHub API calls: look up a pull request, and create or update its clean-mode comment."""
 import json
 import urllib.request
 
@@ -16,6 +16,11 @@ def github_request(method, url, token, body=None):
     })
     with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
         return json.loads(response.read() or b"null")
+
+
+def fetch_pull_request(repo, number, token, request=github_request):
+    """The pull request's details, for events that carry only its number (comments)."""
+    return request("GET", f"{API_URL}/repos/{repo}/pulls/{number}", token)
 
 
 def upsert_comment(repo, pr_number, body, token, marker, request=github_request):

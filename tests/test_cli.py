@@ -184,3 +184,45 @@ def test_failure_text_with_newlines_cannot_inject_workflow_commands(pr, capsys):
     warning = next(l for l in lines if l.startswith("::warning::"))
     assert not any(l.startswith("::error::") for l in lines)
     assert "boom%0A::error::injected" in warning
+
+
+def comment_event(pr):
+    """Swap the event for an issue_comment on the same PR, which carries only the issue number."""
+    pull = json.loads(pr["event"].read_text())["pull_request"]
+    pr["event"].write_text(json.dumps({
+        "issue": {"number": 5, "pull_request": {"url": "https://api.github.com/repos/o/r/pulls/5"}},
+        "comment": {"body": "@clean-mode please"},
+    }))
+    return pull
+
+
+def test_comment_trigger_looks_up_the_pr_and_scores_it(pr):
+    pull = comment_event(pr)
+    fetched = []
+
+    def fetch(repo, number, token):
+        fetched.append((repo, number, token))
+        return pull
+
+    client, post = FakeJevClient(), RecordingPost()
+    assert clean_mode_check.main(
+        ["--event-path", str(pr["event"]), "--post"], client=client, post=post, fetch=fetch
+    ) == 0
+    assert fetched == [("o/r", 5, "token")]
+    assert len(client.calls) == 3
+    assert "# Fix limits\n\nExplains the fix." in client.calls[0]["state"]
+    assert post.calls[0][1] == 5
+
+
+def test_failed_pr_lookup_warns_and_exits_zero(pr, capsys):
+    comment_event(pr)
+
+    def fetch(repo, number, token):
+        raise OSError("502")
+
+    client, post = FakeJevClient(), RecordingPost()
+    assert clean_mode_check.main(
+        ["--event-path", str(pr["event"]), "--post"], client=client, post=post, fetch=fetch
+    ) == 0
+    assert client.calls == [] and post.calls == []
+    assert "::warning::could not look up the pull request: 502" in capsys.readouterr().out
