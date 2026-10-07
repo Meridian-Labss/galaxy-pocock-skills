@@ -10,7 +10,10 @@ Scoring uses Jev, a judging model from TypeSafe.
 2. Add this workflow:
 
 ```yaml
-on: pull_request
+on:
+  pull_request:
+    # edited: re-score when the title or description changes
+    types: [opened, synchronize, reopened, edited]
 permissions:
   contents: read
   pull-requests: write
