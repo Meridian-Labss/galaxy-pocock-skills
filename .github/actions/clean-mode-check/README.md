@@ -1,10 +1,13 @@
-# Clean-mode check
+# Pull requests get an advisory writing-quality comment
 
-Scores a pull request's description and changed Markdown docs against [clean-mode](../../../skills/productivity/clean-mode/SKILL.md) with Jev (TypeSafe's judging model), then posts one advisory comment. It never fails the build on a low score.
+This action scores a pull request's description and its changed Markdown docs against the [clean-mode](../../../skills/productivity/clean-mode/SKILL.md) writing guide, then posts one comment with the scores. A low score never fails the build.
 
-## Usage
+Scoring uses Jev, a judging model from TypeSafe.
 
-Add a `TYPESAFE_API_KEY` Actions secret, then:
+## Setup
+
+1. Add your TypeSafe API key as a repository secret named `TYPESAFE_API_KEY`.
+2. Add this workflow:
 
 ```yaml
 on: pull_request
@@ -26,33 +29,31 @@ jobs:
           typesafe-api-key: ${{ secrets.TYPESAFE_API_KEY }}
 ```
 
-Keep `contents: read`: listing any permission sets the rest to none, and checkout needs it on private repos.
+Keep both permissions. Naming any permission turns off the rest, and the checkout step needs read access on private repos.
 
-## Inputs
+## Settings
 
-| Input | Default | Behavior |
+| Input | Default | Effect |
 |---|---|---|
-| `typesafe-api-key` | none | TypeSafe API key. If empty, the check skips. |
-| `github-token` | `${{ github.token }}` | Posts the comment. |
-| `include` | `**/*.md` | Comma-separated globs of files to score. Case-sensitive; `*` also matches across `/`. Add `**/*.mdx` to opt in (rubrics are untested on MDX). |
-| `max-files` | `10` | Most docs to score, ranked by lines changed. |
-| `max-chars` | `75000` | Longer docs are skipped, not truncated. The default keeps each doc inside Jev's 32k-token limit. |
-| `min-lines` | `3` | Docs with fewer lines changed are not scored. |
+| `typesafe-api-key` | none | Without a key, the check skips. |
+| `github-token` | the workflow's token | Used to post the comment. |
+| `include` | `**/*.md` | Which files to score, as comma-separated patterns. Case-sensitive; `*` also matches inside subfolders. Add `**/*.mdx` to opt in (untested). |
+| `max-files` | `10` | Most docs to score. The most-changed docs go first. |
+| `max-chars` | `75000` | Longer docs are skipped, not cut short. Keeps each doc within Jev's size limit. |
+| `min-lines` | `3` | Docs with smaller changes are skipped. |
 
 ## Limits
 
-- Scores cover whole files, not just the PR's changes.
-- The "Not scored" list shows at most 20 entries.
-- Linux and macOS runners only.
-- Check out to the workspace root (no `path:` on `actions/checkout`).
-- Fork PRs are not scored: no secrets reach them.
-- Runs on `pull_request` events only (not `pull_request_target`). On any other trigger it logs a notice and does nothing.
-- Needs `fetch-depth: 0`. If the base commit is missing (shallow checkout), the step fails with an error naming it.
-- The diff runs against the PR's head commit.
+- Each file is scored as a whole, so old text affects the score.
+- Pull requests from forks are not scored, because GitHub withholds secrets from them.
+- Runs only for pull request events. Other triggers log a notice and stop. Use the `pull_request` trigger shown above, not `pull_request_target`, which would expose secrets to untrusted code.
+- Needs the full git history (the `fetch-depth: 0` line above). Without it, the step fails and says so.
+- Linux and macOS runners only. Check the repo out to the default folder.
+- The comment lists at most 20 skipped files.
 
 ## Releasing
 
-Consumers pin `@v1`. After a release, move the tag:
+Other repos pin the `v1` tag. After a release, move it:
 
 ```bash
 git tag -f v1 && git push -f origin v1

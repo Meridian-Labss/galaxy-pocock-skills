@@ -2,11 +2,15 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A reusable GitHub Action that scores changed Markdown docs and the PR description against clean-mode with Jev, and posts one advisory PR comment.
+**Goal:** A reusable GitHub Action that scores a pull request's changed Markdown docs and its description against the clean-mode writing rules, then posts one advisory comment on the pull request. Scoring uses Jev, TypeSafe's judging model.
 
-**Architecture:** A new shared module, `evals/jev_core.py`, owns rubric loading and Jev calls for both the existing eval scorer and the new CI CLI. The CLI (`ci/clean_mode_check.py`) is split into small modules: collect changed docs, render the comment, post the comment. A composite action wraps the CLI.
+**Architecture:**
 
-**Tech Stack:** Python 3.12, `typesafe-sdk` 0.7.2 (Jev), pytest, git, GitHub REST API via `urllib`, GitHub composite actions.
+- One new shared scoring module loads the rubrics (scoring guides, one per clean-mode rule) and asks Jev for scores. The existing eval scorer and the new CI command both use it.
+- The CI command has three small parts: find changed docs, write the comment, post the comment.
+- A composite action (a reusable GitHub Action built from shell steps) runs the command.
+
+**Tech Stack:** Python 3.12, TypeSafe SDK 0.7.2, pytest, git, GitHub REST API (called with Python's standard library), GitHub composite actions.
 
 **Spec:** [docs/superpowers/specs/2026-10-07-clean-mode-ci-check-design.md](../specs/2026-10-07-clean-mode-ci-check-design.md)
 
@@ -14,32 +18,32 @@
 
 ## Before you start
 
-- Branch: create `feat/clean-mode-ci-check` from `eval/clean-mode-dimensions-v2` (the spec is committed there).
-- Python: use `evals/.venv/bin/python`. Create it with `python3 -m venv evals/.venv` if missing.
-- Repo rules (from `CLAUDE.md` and memory): no em-dashes in prose or comments; American spelling in new text ("normalized"); run the `clean-mode` skill before writing any README.
-- SDK facts this plan relies on:
-  - `ScoreAnswer.score` is a float: the probability-weighted mean of levels. `probabilities` maps int level to probability.
-  - `TypeSafeClient` retries by default. `TypeSafeClient(retry=RetryPolicy(max_retries=0))` turns that off; the spec says no retries.
-  - All SDK errors subclass `typesafe_sdk.TypeSafeError`.
+- Branch: create `feat/clean-mode-ci-check` from `eval/clean-mode-dimensions-v2`, where the spec is committed.
+- Python: use the eval virtual environment, `evals/.venv/bin/python`. If missing, create it with `python3 -m venv evals/.venv`.
+- Repo rules: no em-dashes; American spelling in new text; run the `clean-mode` skill before writing any README.
+- How the TypeSafe SDK behaves:
+  - Each score is one number: Jev's average across the rubric's levels, weighted by how likely it rates each one. The result also gives each level's probability.
+  - The client retries failed calls by default. The spec says no retries, so turn them off (`RetryPolicy(max_retries=0)`).
+  - Every SDK error shares one base class, `TypeSafeError`, so one handler catches them all.
 
 ## File map
 
 | File | Responsibility |
 |---|---|
-| `evals/jev_core.py` | Create. Load and validate `dimensions.json`, build Jev questions, call Jev, compute composites |
-| `evals/score_with_jev.py` | Modify. Use `jev_core` instead of its own config and scoring code |
+| `evals/jev_core.py` | Create. Shared scoring: load and check the rubrics, ask Jev, combine the scores |
+| `evals/score_with_jev.py` | Modify. Use the shared module instead of its own scoring code |
 | `evals/requirements.txt` | Modify. Pin versions |
 | `evals/requirements-dev.txt` | Create. Adds pytest |
-| `ci/collect.py` | Create. Find changed docs via git, choose which to score |
-| `ci/render.py` | Create. Overall score, weakest rubrics, Markdown comment |
-| `ci/post_comment.py` | Create. Create or update the marked PR comment |
-| `ci/clean_mode_check.py` | Create. CLI entry point wiring the above |
-| `tests/` | Create. `conftest.py`, `fake_jev.py`, fixtures, one test file per module |
+| `ci/collect.py` | Create. Find changed docs with git and choose which to score |
+| `ci/render.py` | Create. Write the comment: overall score and weakest rubrics |
+| `ci/post_comment.py` | Create. Post the comment, or update it if one exists |
+| `ci/clean_mode_check.py` | Create. Command that runs the three parts above |
+| `tests/` | Create. Shared setup, a fake Jev, sample docs, one test file per module |
 | `pytest.ini` | Create. Points pytest at `tests/` |
-| `.github/actions/clean-mode-check/action.yml` | Create. Composite action |
+| `.github/actions/clean-mode-check/action.yml` | Create. The action |
 | `.github/actions/clean-mode-check/README.md` | Create. How a repo adopts the action |
 | `.github/workflows/test.yml` | Create. Runs pytest |
-| `.github/workflows/clean-mode-check.yml` | Create. Runs the action on this repo's PRs (end-to-end check) |
+| `.github/workflows/clean-mode-check.yml` | Create. Runs the action on this repo's PRs as an end-to-end check |
 
 ---
 
@@ -68,7 +72,7 @@ pytest==8.4.2
 ```
 
 Run: `evals/.venv/bin/pip install -r evals/requirements-dev.txt`
-Expected: installs pytest; typesafe-sdk already present.
+Expected: installs pytest; the TypeSafe SDK is already installed.
 
 - [ ] **Step 2: Add `tests/conftest.py`**
 
@@ -174,7 +178,7 @@ git add pytest.ini evals/requirements-dev.txt tests/
 git commit -m "Add Python test setup"
 ```
 
-### Task 2: `jev_core` module
+### Task 2: Shared scoring module
 
 **Files:**
 - Create: `evals/jev_core.py`
@@ -401,7 +405,7 @@ git add evals/jev_core.py tests/test_jev_core.py
 git commit -m "Add jev_core, the shared Jev scoring module"
 ```
 
-### Task 3: Point the eval scorer at `jev_core`
+### Task 3: Switch the eval scorer to the shared module
 
 **Files:**
 - Modify: `evals/score_with_jev.py:32-83` (imports and config block), `evals/score_with_jev.py:219-251` (`score_texts`)
@@ -409,7 +413,7 @@ git commit -m "Add jev_core, the shared Jev scoring module"
 
 - [ ] **Step 1: Replace the import and config block**
 
-In `evals/score_with_jev.py`, replace everything from `try:\n    from typesafe_sdk import Score, TypeSafeClient` (line 32) through the `_missing` check ending at line 83 with:
+In `evals/score_with_jev.py`, replace lines 32 to 83 (from the SDK import through the `_missing` check) with:
 
 ```python
 try:
@@ -930,7 +934,7 @@ git add ci/post_comment.py tests/test_post_comment.py
 git commit -m "Post or update the clean-mode PR comment"
 ```
 
-### Task 7: CLI entry point
+### Task 7: The CI command
 
 **Files:**
 - Create: `ci/clean_mode_check.py`
@@ -1152,12 +1156,12 @@ if __name__ == "__main__":
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `evals/.venv/bin/python -m pytest -v`
-Expected: all tests pass (the 5 new ones plus every earlier one).
+Expected: all tests pass, including the 5 new ones.
 
 - [ ] **Step 5: Try it locally against this repo**
 
 Run: `evals/.venv/bin/python ci/clean_mode_check.py --base main --pr-title "Test" --pr-body-file README.md`
-Expected without `TYPESAFE_API_KEY`: the "skipping" notice and exit 0. With a key: a Markdown summary covering the docs changed on this branch.
+Expected: without an API key (`TYPESAFE_API_KEY`), a "skipping" notice and exit 0. With a key, a Markdown summary of the docs changed on this branch.
 
 - [ ] **Step 6: Commit**
 
@@ -1178,7 +1182,7 @@ git commit -m "Add the clean-mode CI command"
 
 - [ ] **Step 1: Write `action.yml`**
 
-Inputs reach the shell through `env`, never `${{ }}` inside `run`, so input values cannot inject shell code.
+Pass inputs to the shell as environment variables, never as `${{ }}` expressions inside `run`, so an input cannot inject shell code.
 
 ```yaml
 name: Clean-mode check
@@ -1241,16 +1245,17 @@ runs:
 
 - [ ] **Step 2: Write the README**
 
-Run the `clean-mode` skill first. Content to cover, in this order:
+Content to cover, in this order:
 
 1. One line: what it does and that it is advisory.
-2. The usage YAML from the spec's "How a repo uses it" section, with `<org>` replaced by `Meridian-Labss`. Keep `contents: read` in its `permissions` block: listing any permission sets the rest to none, and checkout needs read access on private repos.
-3. The inputs table from the spec.
-4. Fork PRs are not scored (no secrets), and scores cover whole files.
-5. Versioning: consumers pin `@v1`; maintainers move the tag with `git tag -f v1 && git push -f origin v1` after a release.
-6. It only runs on `pull_request` events; on any other trigger it posts a notice and does nothing.
+2. The usage YAML from the spec's "How a repo uses it" section, with `<org>` replaced by `Meridian-Labss`.
+3. Why the usage YAML keeps `contents: read`: once a workflow lists any permission, GitHub sets every unlisted one to none, and checkout needs read access on private repos.
+4. The inputs table from the spec.
+5. Fork PRs are not scored, since they get no secrets. Scores cover whole files, not just changed lines.
+6. Versioning: users pin `@v1`. After a release, maintainers move the tag with `git tag -f v1 && git push -f origin v1`.
+7. It runs only on pull request events. Any other trigger posts a notice and does nothing.
 
-Then add one line to the top-level `README.md` pointing to this README (the global rule keeps the README in sync with major features). Place it near the end, outside the skill lists, so the skill-listing rules in `CLAUDE.md` are unaffected.
+Then add one line near the end of the top-level `README.md` linking to this README. Keep it outside the skill lists, which have their own rules.
 
 - [ ] **Step 3: Commit**
 
@@ -1297,7 +1302,7 @@ jobs:
 - [ ] **Step 2: Run the same steps locally on Python 3.12, if available**
 
 Run: `d=$(mktemp -d) && python3.12 -m venv "$d" && "$d/bin/pip" install -q -r evals/requirements-dev.txt && "$d/bin/python" -m pytest -q`
-Expected: all tests pass. If `python3.12` is missing, note it and rely on the workflow run in Task 10.
+Expected: all tests pass. If Python 3.12 is missing, tell the user and rely on the workflow run in Task 10.
 
 - [ ] **Step 3: Commit**
 
@@ -1308,7 +1313,7 @@ git commit -m "Run the clean-mode CI tests on pull requests"
 
 ### Task 10: End-to-end check on this repo
 
-Needs the user: pushing, a `TYPESAFE_API_KEY` repo secret, and opening PRs are outward-facing. Ask before each.
+This task needs the user. Pushing, adding the API key secret, and opening PRs are visible to others, so ask before each.
 
 **Files:**
 - Create: `.github/workflows/clean-mode-check.yml`
@@ -1349,22 +1354,22 @@ git commit -m "Run the clean-mode check on this repo's pull requests"
 
 - [ ] **Step 3: Ask the user to add the secret and approve pushing**
 
-The user adds `TYPESAFE_API_KEY` under the repo's Actions secrets. With approval, push the branch and open a draft PR.
+The user adds `TYPESAFE_API_KEY` as a repo Actions secret. Once they approve, push the branch and open a draft PR.
 
 - [ ] **Step 4: Add a throwaway test commit**
 
-On a separate branch from `feat/clean-mode-ci-check`, add:
-- `scratch/padded.md`: a doc full of hedging, restatement, and bold field labels
-- `scratch/clean.md`: the same facts written per clean-mode
+On a separate branch off `feat/clean-mode-ci-check`, add:
+- `scratch/padded.md`: a doc full of hedging, repetition, and bold field labels
+- `scratch/clean.md`: the same facts rewritten to follow clean-mode
 
-Open a draft PR. Check:
+Open a draft PR from this branch into `feat/clean-mode-ci-check`. Check:
 - the Test and Clean-mode check workflows both pass
 - exactly one comment appears, scoring the PR description and both docs
 - `scratch/padded.md` scores lower than `scratch/clean.md`
 
 - [ ] **Step 5: Push a second commit to the same PR**
 
-Check that the existing comment is updated and no second comment appears.
+Check that the bot edits its first comment instead of adding a second.
 
 - [ ] **Step 6: Close the throwaway PR without merging and delete its branch**
 
