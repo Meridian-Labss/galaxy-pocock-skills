@@ -1,0 +1,55 @@
+name: Clean-mode check
+
+on:
+  pull_request:
+    # edited: re-score when the title or description changes
+    types: [opened, synchronize, reopened, edited]
+  # A comment containing "@clean-mode" on a pull request asks for a re-score.
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# Two jobs, because GitHub downloads every action a job uses before checking
+# any step's condition, and the two triggers need different copies of the action.
+jobs:
+  on-pull-request:
+    if: github.event_name == 'pull_request'
+    concurrency:
+      group: clean-mode-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Fork pull requests get no secrets, so running this pull request's own
+      # copy of the action is safe, and lets the action test its own changes.
+      - uses: ./.github/actions/clean-mode-check
+        with:
+          typesafe-api-key: ${{ secrets.TYPESAFE_API_KEY }}
+
+  on-comment:
+    # Comment runs get secrets even on pull requests from forks, so only
+    # people with write access can trigger one.
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '@clean-mode') &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    concurrency:
+      group: clean-mode-${{ github.event.issue.number }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      # A comment run starts on the default branch; check out the pull request instead.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refs/pull/${{ github.event.issue.number }}/merge
+      # With secrets in play, never run the pull request's own copy of the action.
+      - uses: Meridian-Labss/galaxy-pocock-skills/.github/actions/clean-mode-check@main
+        with:
+          typesafe-api-key: ${{ secrets.TYPESAFE_API_KEY }}
