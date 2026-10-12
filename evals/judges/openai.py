@@ -46,11 +46,7 @@ class OpenAIJudge:
                 raise JudgeError(f"OpenAI refused to score {name}")
             if answer.type != "score":
                 raise JudgeError(f"expected a score for {name}, got a {answer.type}")
-            answers[name] = Answer(
-                score=answer.score,
-                confidence=answer.confidence,
-                probabilities={p.value: p.probability for p in answer.probabilities},
-            )
+            answers[name] = _to_answer(name, answer, len(rubrics[name].levels))
         return answers
 
     def close(self):
@@ -61,3 +57,17 @@ class OpenAIJudge:
 
     def __exit__(self, *exc):
         self.close()
+
+
+
+def _to_answer(name, answer, level_count):
+    """Map a score answer, rejecting any that falls outside the rubric's levels (0 to level_count - 1)."""
+    try:
+        probabilities = {p.value: p.probability for p in answer.probabilities}
+        score, confidence = float(answer.score), float(answer.confidence)
+    except (AttributeError, TypeError, ValueError) as e:
+        raise JudgeError(f"malformed answer for {name}: {e}") from e
+    top = level_count - 1
+    if not 0 <= score <= top or any(not 0 <= level <= top for level in probabilities):
+        raise JudgeError(f"answer for {name} falls outside levels 0 to {top}")
+    return Answer(score=score, confidence=confidence, probabilities=probabilities)

@@ -135,3 +135,22 @@ def test_closing_the_judge_closes_the_client():
     with openai_judge.OpenAIJudge(client=client) as judge:
         assert (judge.name, judge.model) == ("openai", "gpt-6-luna")
     assert client.closed
+
+
+@pytest.mark.parametrize("bad_padding", [
+    score_answer("padding", 2.5, {1: 0.1, 2: 0.3, 3: 0.6}),  # levels numbered from 1
+    score_answer("padding", 3.0, {0: 0.1, 1: 0.3, 2: 0.6}),  # score above the top level
+])
+def test_answer_outside_the_rubric_ladder_is_a_judge_error(bad_padding):
+    reply = decision([bad_padding, score_answer("economy", 1.0, {0: 0.0, 1: 1.0})])
+    with pytest.raises(JudgeError, match="padding"):
+        openai_judge.OpenAIJudge(client=StandInClient(reply)).score("doc", RUBRICS)
+
+
+def test_malformed_score_answer_is_a_judge_error():
+    # The library parses replies leniently, so a field can arrive missing.
+    economy = decision([score_answer("economy", 1.0, {0: 0.0, 1: 1.0})]).answers[0]
+    padding = SimpleNamespace(type="score", name="padding", score=1.0, confidence=0.7, probabilities=None)
+    reply = SimpleNamespace(answers=[padding, economy])
+    with pytest.raises(JudgeError, match="padding"):
+        openai_judge.OpenAIJudge(client=StandInClient(reply)).score("doc", RUBRICS)
