@@ -1,21 +1,20 @@
-"""Shared Jev scoring for the clean-mode evals and the clean-mode CI check.
+"""Shared scoring for the clean-mode evals and the clean-mode CI check.
 
-Loads the rubrics in dimensions.json, turns them into Jev Score questions,
-asks Jev, and adds the composite rubrics. Raises instead of exiting, so each
-caller decides how to fail.
+Loads the rubrics in dimensions.json, asks a judge to score a document
+against them, and adds the composite rubrics. Raises instead of exiting, so
+each caller decides how to fail.
 """
 import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from typesafe_sdk import RetryPolicy, Score, TypeSafeClient, TypeSafeError
+from judges import Rubric
 
 DEFAULT_CONFIG_PATH = Path(__file__).with_name("dimensions.json")
 DOCUMENT_ONLY = "document_only"
 
 __all__ = [
-    "Config", "ConfigError", "DOCUMENT_ONLY", "TypeSafeError",
-    "load_config", "make_client", "score_text",
+    "Config", "ConfigError", "DOCUMENT_ONLY", "load_config", "score_text",
 ]
 
 
@@ -51,14 +50,12 @@ class Config:
     def normalized(self, name, score):
         return score / self.top(name)
 
-    def questions_by_state(self, states=None):
+    def rubrics_by_state(self, states=None):
         grouped = {}
         for name, entry in self.dimensions.items():
             state = entry.get("state", DOCUMENT_ONLY)
             if states is None or state in states:
-                grouped.setdefault(state, {})[name] = Score(
-                    instructions=entry["instructions"], criteria=entry["criteria"]
-                )
+                grouped.setdefault(state, {})[name] = Rubric(entry["instructions"], entry["criteria"])
         return grouped
 
 
@@ -89,14 +86,7 @@ def load_config(path=DEFAULT_CONFIG_PATH):
     return Config(templates, dimensions, composites, report)
 
 
-def make_client(retries=None):
-    """A Jev client. retries=None keeps the SDK's default; 0 turns retries off."""
-    if retries is None:
-        return TypeSafeClient()
-    return TypeSafeClient(retry=RetryPolicy(max_retries=retries))
-
-
-def score_text(client, config, text, source=None, states=None):
+def score_text(judge, config, text, source=None, states=None):
     """Score one document: {rubric: {"score", "confidence", "probabilities"}}.
 
     Rubric groups that need source material are skipped when source is None.
@@ -104,21 +94,18 @@ def score_text(client, config, text, source=None, states=None):
     probabilities because they have no ladder of their own.
     """
     raw = {}
-    for state, questions in config.questions_by_state(states).items():
+    for state, rubrics in config.rubrics_by_state(states).items():
         template = config.state_templates[state]
         if "{source}" in template and source is None:
             continue
-        response = client.system_one(
-            state=template.format(document=text, source=source or ""),
-            questions=questions,
-        )
+        answers = judge.score(template.format(document=text, source=source or ""), rubrics)
         raw.update({
             name: {
                 "score": answer.score,
                 "confidence": answer.confidence,
                 "probabilities": {str(k): v for k, v in answer.probabilities.items()},
             }
-            for name, answer in response.answers.items()
+            for name, answer in answers.items()
         })
     for name, factors in config.composites.items():
         if all(factor in raw for factor in factors):

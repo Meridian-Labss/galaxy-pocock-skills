@@ -1,4 +1,4 @@
-"""Turn Jev scores into the Markdown summary posted on the pull request."""
+"""Turn judge scores into the Markdown summary posted on the pull request."""
 from dataclasses import dataclass
 
 import scoring
@@ -34,7 +34,7 @@ def overall(config, raw):
 
 
 def level_text(config, name, answer):
-    """Criterion text for the level Jev found most likely."""
+    """Criterion text for the level the judge found most likely."""
     probabilities = answer["probabilities"]
     level = int(max(probabilities, key=probabilities.get))
     return config.dimensions[name]["criteria"][level]

@@ -5,7 +5,7 @@ import pytest
 
 import clean_mode_check
 from conftest import git
-from fake_judge import FakeJevClient
+from fake_judge import FakeJudge
 from render import MARKER
 
 
@@ -43,17 +43,17 @@ class RecordingPost:
             raise self.error
 
 
-def run(pr, client, post, extra=()):
+def run(pr, judge, post, extra=()):
     return clean_mode_check.main(
-        ["--event-path", str(pr["event"]), "--post", *extra], client=client, post=post
+        ["--event-path", str(pr["event"]), "--post", *extra], judge=judge, post=post
     )
 
 
 def test_scores_docs_and_pr_then_posts_one_comment(pr):
-    client, post = FakeJevClient(), RecordingPost()
-    assert run(pr, client, post) == 0
-    assert len(client.calls) == 3  # PR description, keep.md, new.md
-    assert "# Fix limits\n\nExplains the fix." in client.calls[0]["state"]
+    judge, post = FakeJudge(), RecordingPost()
+    assert run(pr, judge, post) == 0
+    assert len(judge.calls) == 3  # PR description, keep.md, new.md
+    assert "# Fix limits\n\nExplains the fix." in judge.calls[0]["text"]
     (repo, number, body, marker), = post.calls
     assert (repo, number, marker) == ("o/r", 5, MARKER)
     assert "| PR description |" in body and "`keep.md`" in body
@@ -62,14 +62,14 @@ def test_scores_docs_and_pr_then_posts_one_comment(pr):
 
 def test_missing_api_key_skips_without_posting(pr, monkeypatch):
     monkeypatch.delenv("TYPESAFE_API_KEY")
-    client, post = FakeJevClient(), RecordingPost()
-    assert run(pr, client, post) == 0
-    assert client.calls == [] and post.calls == []
+    judge, post = FakeJudge(), RecordingPost()
+    assert run(pr, judge, post) == 0
+    assert judge.calls == [] and post.calls == []
 
 
-def test_one_failed_jev_call_marks_only_that_item(pr):
-    client, post = FakeJevClient(fail_on="alpha"), RecordingPost()
-    assert run(pr, client, post) == 0
+def test_one_failed_judge_call_marks_only_that_item(pr):
+    judge, post = FakeJudge(fail_on="alpha"), RecordingPost()
+    assert run(pr, judge, post) == 0
     body = post.calls[0][2]
     assert "- `new.md`: could not score" in body
     assert "| `keep.md` |" in body
@@ -79,39 +79,39 @@ def test_empty_pr_body_is_reported_not_scored(pr):
     event = json.loads(pr["event"].read_text())
     event["pull_request"]["body"] = None
     pr["event"].write_text(json.dumps(event))
-    client, post = FakeJevClient(), RecordingPost()
-    assert run(pr, client, post) == 0
-    assert len(client.calls) == 2
+    judge, post = FakeJudge(), RecordingPost()
+    assert run(pr, judge, post) == 0
+    assert len(judge.calls) == 2
     assert "- PR description: no description" in post.calls[0][2]
 
 
 def test_a_failed_post_still_exits_zero(pr):
-    client, post = FakeJevClient(), RecordingPost(error=OSError("403"))
-    assert run(pr, client, post) == 0
+    judge, post = FakeJudge(), RecordingPost(error=OSError("403"))
+    assert run(pr, judge, post) == 0
     assert pr["summary"].exists()
 
 
 def test_unreachable_base_is_a_setup_error(pr, capsys):
-    client, post = FakeJevClient(), RecordingPost()
+    judge, post = FakeJudge(), RecordingPost()
     code = clean_mode_check.main(
-        ["--event-path", str(pr["event"]), "--base", "0" * 40, "--post"], client=client, post=post
+        ["--event-path", str(pr["event"]), "--base", "0" * 40, "--post"], judge=judge, post=post
     )
     assert code == 1
     assert "::error::could not diff" in capsys.readouterr().out
-    assert client.calls == [] and post.calls == []
+    assert judge.calls == [] and post.calls == []
 
 
 def test_local_mode_uses_flags_and_does_not_post(pr, tmp_path, monkeypatch, capsys):
     monkeypatch.delenv("GITHUB_EVENT_PATH", raising=False)
     body_file = tmp_path / "body.md"
     body_file.write_text("Local body.")
-    client, post = FakeJevClient(), RecordingPost()
+    judge, post = FakeJudge(), RecordingPost()
     code = clean_mode_check.main(
         ["--base", "main~1", "--pr-title", "Local", "--pr-body-file", str(body_file)],
-        client=client, post=post,
+        judge=judge, post=post,
     )
     assert code == 0
-    assert "# Local\n\nLocal body." in client.calls[0]["state"]
+    assert "# Local\n\nLocal body." in judge.calls[0]["text"]
     assert post.calls == []
     assert "| PR description |" in capsys.readouterr().out
 
@@ -120,9 +120,9 @@ def test_whitespace_only_body_is_reported_as_no_description(pr):
     event = json.loads(pr["event"].read_text())
     event["pull_request"]["body"] = "  \n "
     pr["event"].write_text(json.dumps(event))
-    client, post = FakeJevClient(), RecordingPost()
-    assert run(pr, client, post) == 0
-    assert len(client.calls) == 2
+    judge, post = FakeJudge(), RecordingPost()
+    assert run(pr, judge, post) == 0
+    assert len(judge.calls) == 2
     assert "- PR description: no description" in post.calls[0][2]
 
 
@@ -130,17 +130,17 @@ def test_empty_title_scores_the_body_alone(pr):
     event = json.loads(pr["event"].read_text())
     event["pull_request"]["title"] = None
     pr["event"].write_text(json.dumps(event))
-    client, post = FakeJevClient(), RecordingPost()
-    assert run(pr, client, post) == 0
-    assert client.calls[0]["state"] == "Explains the fix."
+    judge, post = FakeJudge(), RecordingPost()
+    assert run(pr, judge, post) == 0
+    assert judge.calls[0]["text"] == "Explains the fix."
 
 
 def test_missing_pr_number_skips_posting(pr):
     event = json.loads(pr["event"].read_text())
     del event["pull_request"]["number"]
     pr["event"].write_text(json.dumps(event))
-    client, post = FakeJevClient(), RecordingPost()
-    assert run(pr, client, post) == 0
+    judge, post = FakeJudge(), RecordingPost()
+    assert run(pr, judge, post) == 0
     assert post.calls == []
 
 
@@ -167,19 +167,19 @@ def test_diffs_the_pr_head_not_the_checked_out_commit(pr, repo, capsys):
     event = json.loads(pr["event"].read_text())
     event["pull_request"]["head"] = {"sha": head}
     pr["event"].write_text(json.dumps(event))
-    client, post = FakeJevClient(), RecordingPost()
+    judge, post = FakeJudge(), RecordingPost()
 
-    assert run(pr, client, post) == 0
+    assert run(pr, judge, post) == 0
 
-    states = "\n".join(call["state"] for call in client.calls)
+    states = "\n".join(call["text"] for call in judge.calls)
     assert "alpha" in states and "main one" not in states
     body = post.calls[0][2]
     assert "`pr-doc.md`" in body and "main-only.md" not in body
 
 
 def test_failure_text_with_newlines_cannot_inject_workflow_commands(pr, capsys):
-    client = FakeJevClient(fail_on="alpha", error_message="boom\n::error::injected")
-    assert run(pr, client, RecordingPost()) == 0
+    judge = FakeJudge(fail_on="alpha", error_message="boom\n::error::injected")
+    assert run(pr, judge, RecordingPost()) == 0
     lines = capsys.readouterr().out.splitlines()
     warning = next(l for l in lines if l.startswith("::warning::"))
     assert not any(l.startswith("::error::") for l in lines)
@@ -204,13 +204,13 @@ def test_comment_trigger_looks_up_the_pr_and_scores_it(pr):
         fetched.append((repo, number, token))
         return pull
 
-    client, post = FakeJevClient(), RecordingPost()
+    judge, post = FakeJudge(), RecordingPost()
     assert clean_mode_check.main(
-        ["--event-path", str(pr["event"]), "--post"], client=client, post=post, fetch=fetch
+        ["--event-path", str(pr["event"]), "--post"], judge=judge, post=post, fetch=fetch
     ) == 0
     assert fetched == [("o/r", 5, "token")]
-    assert len(client.calls) == 3
-    assert "# Fix limits\n\nExplains the fix." in client.calls[0]["state"]
+    assert len(judge.calls) == 3
+    assert "# Fix limits\n\nExplains the fix." in judge.calls[0]["text"]
     assert post.calls[0][1] == 5
 
 
@@ -220,11 +220,11 @@ def test_failed_pr_lookup_warns_and_exits_zero(pr, capsys):
     def fetch(repo, number, token):
         raise OSError("502")
 
-    client, post = FakeJevClient(), RecordingPost()
+    judge, post = FakeJudge(), RecordingPost()
     assert clean_mode_check.main(
-        ["--event-path", str(pr["event"]), "--post"], client=client, post=post, fetch=fetch
+        ["--event-path", str(pr["event"]), "--post"], judge=judge, post=post, fetch=fetch
     ) == 0
-    assert client.calls == [] and post.calls == []
+    assert judge.calls == [] and post.calls == []
     assert "::warning::could not look up the pull request: 502" in capsys.readouterr().out
 
 
@@ -235,11 +235,11 @@ def test_file_labels_link_to_the_file_at_the_pr_head(pr):
     pr["event"].write_text(json.dumps(event))
 
     post = RecordingPost()
-    assert run(pr, FakeJevClient(), post) == 0
+    assert run(pr, FakeJudge(), post) == 0
     assert f"[`keep.md`](https://github.com/o/r/blob/{head}/keep.md)" in post.calls[0][2]
 
 
 def test_file_labels_stay_plain_without_a_head_commit(pr):
     post = RecordingPost()
-    assert run(pr, FakeJevClient(), post) == 0
+    assert run(pr, FakeJudge(), post) == 0
     assert "| `keep.md` |" in post.calls[0][2]

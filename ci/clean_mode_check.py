@@ -20,6 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "evals"))
 
+import judges  # noqa: E402
 import scoring  # noqa: E402
 from collect import changed_docs, select  # noqa: E402
 from post_comment import fetch_pull_request, upsert_comment  # noqa: E402
@@ -92,20 +93,20 @@ def load_pr(args, fetch):
     return fetch(os.environ["GITHUB_REPOSITORY"], issue["number"], os.environ["GITHUB_TOKEN"])
 
 
-def score_items(client, config, items):
-    """Score (label, text) pairs. A failed Jev call marks only its own item."""
+def score_items(judge, config, items):
+    """Score (label, text) pairs. A failed judge call marks only its own item."""
     results = []
     for label, text in items:
         try:
-            raw = scoring.score_text(client, config, text, states={scoring.DOCUMENT_ONLY})
+            raw = scoring.score_text(judge, config, text, states={scoring.DOCUMENT_ONLY})
             results.append(ItemResult(label, raw))
-        except scoring.TypeSafeError as e:
-            print(f"::warning::{escape_command(f'Jev could not score {label}: {e}')}")
+        except judges.JudgeError as e:
+            print(f"::warning::{escape_command(f'could not score {label}: {e}')}")
             results.append(ItemResult(label, None, "could not score"))
     return results
 
 
-def main(argv=None, client=None, post=upsert_comment, fetch=fetch_pull_request):
+def main(argv=None, judge=None, post=upsert_comment, fetch=fetch_pull_request):
     args = parse_args(argv)
     config = scoring.load_config()
     if not os.environ.get("TYPESAFE_API_KEY"):
@@ -137,8 +138,8 @@ def main(argv=None, client=None, post=upsert_comment, fetch=fetch_pull_request):
     else:
         unscored.append(ItemResult(PR_LABEL, None, "no description"))
 
-    with client or scoring.make_client(retries=0) as jev:
-        results = score_items(jev, config, items) + unscored
+    with judge or judges.make_judge("typesafe", retries=0) as active:
+        results = score_items(active, config, items) + unscored
 
     markdown = render(config, results, selection.too_large, selection.over_limit, args.max_chars, args.max_files)
     print(markdown)

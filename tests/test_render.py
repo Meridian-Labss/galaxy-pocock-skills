@@ -1,15 +1,15 @@
 import pytest
 
 import scoring
-from fake_judge import FakeJevClient
+from fake_judge import FakeJudge
 from render import MARKER, ItemResult, ci_rubrics, overall, render, weakest
 
 CONFIG = scoring.load_config()
 
 
 def scores(level=3, levels=None):
-    client = FakeJevClient(level=level, levels=levels)
-    return scoring.score_text(client, CONFIG, "doc", states={scoring.DOCUMENT_ONLY})
+    judge = FakeJudge(level=level, levels=levels)
+    return scoring.score_text(judge, CONFIG, "doc", states={scoring.DOCUMENT_ONLY})
 
 
 def test_ci_rubrics_are_the_report_rows_that_need_no_source():
@@ -31,7 +31,7 @@ def test_weakest_expands_composites_and_breaks_ties_by_file_order():
     assert [name for name, _, _ in weakest(CONFIG, raw)] == ["padding", "heading_clarity", "economy"]
 
 
-def test_weakest_shows_the_level_jev_found_most_likely():
+def test_weakest_shows_the_level_the_judge_found_most_likely():
     name, score, text = weakest(CONFIG, scores(levels={"padding": 1}))[0]
     assert name == "padding"
     assert score == pytest.approx(1 / 3)

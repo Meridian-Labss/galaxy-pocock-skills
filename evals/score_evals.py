@@ -30,9 +30,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 try:
+    import judges
     import scoring
 except ImportError as e:
-    sys.exit(f"could not import scoring ({e}). Run: pip install -r evals/requirements.txt")
+    sys.exit(f"could not import the scoring modules ({e}). Run: pip install -r evals/requirements.txt")
 
 # The questions live in dimensions.json next to this script and are loaded by
 # scoring, which the clean-mode CI check shares, so both ask Jev identical
@@ -202,12 +203,12 @@ def score_texts(texts, sources=None):
     sources = sources or {}
     skipped = set()
     scored = {}
-    with scoring.make_client() as client:
+    with judges.make_judge("typesafe") as judge:
         for key, text in texts.items():
             case = key.rsplit("__", 2)[0]
             if case not in sources:
                 skipped.add(case)
-            scored[key] = scoring.score_text(client, CONFIG, text, source=sources.get(case))
+            scored[key] = scoring.score_text(judge, CONFIG, text, source=sources.get(case))
     for case in sorted(skipped):
         print(f"warning: no source found for {case}; its with_source dimensions were not scored",
               file=sys.stderr)
