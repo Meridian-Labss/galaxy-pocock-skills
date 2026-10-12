@@ -1,8 +1,16 @@
 name: Clean-mode check
-description: Score a pull request's prose against clean-mode with Jev and post one advisory comment.
+description: Score a pull request's prose against clean-mode with TypeSafe or OpenAI and post one advisory comment.
 inputs:
+  judge:
+    description: Which judging model scores the prose, typesafe or openai.
+    required: false
+    default: typesafe
   typesafe-api-key:
-    description: TypeSafe API key. If empty, the check skips.
+    description: TypeSafe API key, used when judge is typesafe. If empty, the check skips.
+    required: false
+    default: ""
+  openai-api-key:
+    description: OpenAI API key, used when judge is openai. If empty, the check skips.
     required: false
     default: ""
   github-token:
@@ -44,7 +52,9 @@ runs:
     - name: Score prose
       shell: bash
       env:
+        JUDGE: ${{ inputs.judge }}
         TYPESAFE_API_KEY: ${{ inputs.typesafe-api-key }}
+        OPENAI_API_KEY: ${{ inputs.openai-api-key }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
         INCLUDE: ${{ inputs.include }}
         MAX_FILES: ${{ inputs.max-files }}
@@ -52,5 +62,6 @@ runs:
         MIN_LINES: ${{ inputs.min-lines }}
       run: >
         "$RUNNER_TEMP/clean-mode-venv/bin/python" "$GITHUB_ACTION_PATH/../../../ci/clean_mode_check.py" --post
+        --judge "$JUDGE"
         --include "$INCLUDE" --max-files "$MAX_FILES"
         --max-chars "$MAX_CHARS" --min-lines "$MIN_LINES"

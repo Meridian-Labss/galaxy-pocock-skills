@@ -2,11 +2,11 @@
 
 This action scores a pull request's description and its changed Markdown docs against the [clean-mode](../../../skills/productivity/clean-mode/SKILL.md) writing guide, then posts one comment with the scores. A low score never fails the build.
 
-Scoring uses Jev, a judging model from TypeSafe.
+Scoring uses a judging model: TypeSafe's Jev by default, or OpenAI's Decisions API.
 
 ## Setup
 
-1. Add your TypeSafe API key as a repository secret named `TYPESAFE_API_KEY`.
+1. Add an API key as a repository secret: `TYPESAFE_API_KEY` for TypeSafe (the default), or `OPENAI_API_KEY` for OpenAI.
 2. Add this workflow:
 
 ```yaml
@@ -43,6 +43,14 @@ jobs:
           typesafe-api-key: ${{ secrets.TYPESAFE_API_KEY }}
 ```
 
+To use OpenAI, replace the action's `with:` lines with:
+
+```yaml
+        with:
+          judge: openai
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+```
+
 Keep both permissions. Naming any permission turns off the rest, and the checkout step needs read access on private repos.
 
 ## Asking for a re-score
@@ -55,11 +63,13 @@ Comment-triggered runs only work once this workflow is on the default branch. Gi
 
 | Input | Default | Effect |
 |---|---|---|
-| `typesafe-api-key` | none | Without a key, the check skips. |
+| `judge` | `typesafe` | Which judging model scores the prose: `typesafe` or `openai`. |
+| `typesafe-api-key` | none | Used when `judge` is `typesafe`. Without it, the check skips. |
+| `openai-api-key` | none | Used when `judge` is `openai`. Without it, the check skips. |
 | `github-token` | the workflow's token | Used to post the comment. |
 | `include` | `**/*.md` | Which files to score, as comma-separated patterns. Case-sensitive; `*` also matches inside subfolders. Add `**/*.mdx` to opt in (untested). |
 | `max-files` | `10` | Most docs to score. The most-changed docs go first. |
-| `max-chars` | `75000` | Longer docs are skipped, not cut short. Keeps each doc within Jev's size limit. |
+| `max-chars` | `75000` | Longer docs are skipped, not cut short. Keeps each doc within TypeSafe's size limit; OpenAI publishes none. |
 | `min-lines` | `3` | Docs with smaller changes are skipped. |
 
 ## Limits
