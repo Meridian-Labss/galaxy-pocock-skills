@@ -154,3 +154,17 @@ def test_malformed_score_answer_is_a_judge_error():
     reply = SimpleNamespace(answers=[padding, economy])
     with pytest.raises(JudgeError, match="padding"):
         openai_judge.OpenAIJudge(client=StandInClient(reply)).score("doc", RUBRICS)
+
+
+@pytest.mark.parametrize("probabilities", [
+    [SimpleNamespace(value=None, probability=1.0)],
+    [SimpleNamespace(value="2", probability=1.0)],
+    [SimpleNamespace(value=2, probability=None)],
+    [],
+])
+def test_malformed_probabilities_are_a_judge_error(probabilities):
+    economy = decision([score_answer("economy", 1.0, {0: 0.0, 1: 1.0})]).answers[0]
+    padding = SimpleNamespace(type="score", name="padding", score=1.0, confidence=0.7, probabilities=probabilities)
+    reply = SimpleNamespace(answers=[padding, economy])
+    with pytest.raises(JudgeError, match="padding"):
+        openai_judge.OpenAIJudge(client=StandInClient(reply)).score("doc", RUBRICS)

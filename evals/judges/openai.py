@@ -59,15 +59,18 @@ class OpenAIJudge:
         self.close()
 
 
-
 def _to_answer(name, answer, level_count):
-    """Map a score answer, rejecting any that falls outside the rubric's levels (0 to level_count - 1)."""
+    """Map a score answer, rejecting any that is malformed or falls outside the rubric's levels (0 to level_count - 1)."""
+    top = level_count - 1
     try:
-        probabilities = {p.value: p.probability for p in answer.probabilities}
+        probabilities = {}
+        for p in answer.probabilities:
+            if not isinstance(p.value, int) or isinstance(p.value, bool):
+                raise TypeError(f"level {p.value!r} is not a whole number")
+            probabilities[p.value] = float(p.probability)
         score, confidence = float(answer.score), float(answer.confidence)
     except (AttributeError, TypeError, ValueError) as e:
         raise JudgeError(f"malformed answer for {name}: {e}") from e
-    top = level_count - 1
-    if not 0 <= score <= top or any(not 0 <= level <= top for level in probabilities):
+    if not probabilities or not 0 <= score <= top or any(not 0 <= level <= top for level in probabilities):
         raise JudgeError(f"answer for {name} falls outside levels 0 to {top}")
     return Answer(score=score, confidence=confidence, probabilities=probabilities)
