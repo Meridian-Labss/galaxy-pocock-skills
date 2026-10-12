@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "evals"))
 
-import jev_core  # noqa: E402
+import scoring  # noqa: E402
 from collect import changed_docs, select  # noqa: E402
 from post_comment import fetch_pull_request, upsert_comment  # noqa: E402
 from render import MARKER, ItemResult, render  # noqa: E402
@@ -97,9 +97,9 @@ def score_items(client, config, items):
     results = []
     for label, text in items:
         try:
-            raw = jev_core.score_text(client, config, text, states={jev_core.DOCUMENT_ONLY})
+            raw = scoring.score_text(client, config, text, states={scoring.DOCUMENT_ONLY})
             results.append(ItemResult(label, raw))
-        except jev_core.TypeSafeError as e:
+        except scoring.TypeSafeError as e:
             print(f"::warning::{escape_command(f'Jev could not score {label}: {e}')}")
             results.append(ItemResult(label, None, "could not score"))
     return results
@@ -107,7 +107,7 @@ def score_items(client, config, items):
 
 def main(argv=None, client=None, post=upsert_comment, fetch=fetch_pull_request):
     args = parse_args(argv)
-    config = jev_core.load_config()
+    config = scoring.load_config()
     if not os.environ.get("TYPESAFE_API_KEY"):
         print("::notice::TYPESAFE_API_KEY is not set (normal for PRs from forks); skipping the clean-mode check")
         return 0
@@ -137,7 +137,7 @@ def main(argv=None, client=None, post=upsert_comment, fetch=fetch_pull_request):
     else:
         unscored.append(ItemResult(PR_LABEL, None, "no description"))
 
-    with client or jev_core.make_client(retries=0) as jev:
+    with client or scoring.make_client(retries=0) as jev:
         results = score_items(jev, config, items) + unscored
 
     markdown = render(config, results, selection.too_large, selection.over_limit, args.max_chars, args.max_files)

@@ -1,15 +1,15 @@
 import pytest
 
-import jev_core
-from fake_jev import FakeJevClient
+import scoring
+from fake_judge import FakeJevClient
 from render import MARKER, ItemResult, ci_rubrics, overall, render, weakest
 
-CONFIG = jev_core.load_config()
+CONFIG = scoring.load_config()
 
 
 def scores(level=3, levels=None):
     client = FakeJevClient(level=level, levels=levels)
-    return jev_core.score_text(client, CONFIG, "doc", states={jev_core.DOCUMENT_ONLY})
+    return scoring.score_text(client, CONFIG, "doc", states={scoring.DOCUMENT_ONLY})
 
 
 def test_ci_rubrics_are_the_report_rows_that_need_no_source():

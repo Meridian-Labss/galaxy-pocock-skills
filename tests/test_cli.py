@@ -5,7 +5,7 @@ import pytest
 
 import clean_mode_check
 from conftest import git
-from fake_jev import FakeJevClient
+from fake_judge import FakeJevClient
 from render import MARKER
 
 

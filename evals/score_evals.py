@@ -3,7 +3,7 @@
 
     pip install typesafe-sdk
     export TYPESAFE_API_KEY=...
-    python3 evals/score_with_jev.py
+    python3 evals/score_evals.py
 
 Runs `claude plugin eval` for the given case glob (default: every clean-mode
 case), then scores each captured with/without output on dimensions taken
@@ -30,15 +30,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 try:
-    import jev_core
+    import scoring
 except ImportError as e:
-    sys.exit(f"could not import jev_core ({e}). Run: pip install -r evals/requirements.txt")
+    sys.exit(f"could not import scoring ({e}). Run: pip install -r evals/requirements.txt")
 
 # The questions live in dimensions.json next to this script and are loaded by
-# jev_core, which the clean-mode CI check shares, so both ask Jev identical
+# scoring, which the clean-mode CI check shares, so both ask Jev identical
 # questions. Scannability isn't one snap judgment: it depends on independent
 # factors, so each gets its own atomic question per Jev's guidance, combined
-# by jev_core.score_text. The composite is the MEAN of its factors: a min()
+# by scoring.score_text. The composite is the MEAN of its factors: a min()
 # was tried first and collapsed the composite to one factor (the same factor
 # was lowest for both arms), masking the other factors.
 #
@@ -47,8 +47,8 @@ except ImportError as e:
 # calls on purpose: the sources are deliberately unedited prose, and a judge
 # that has just read one anchors on it when scoring the document's register.
 try:
-    CONFIG = jev_core.load_config()
-except jev_core.ConfigError as e:
+    CONFIG = scoring.load_config()
+except scoring.ConfigError as e:
     sys.exit(str(e))
 COMPOSITES = CONFIG.composites
 REPORT_DIMENSIONS = CONFIG.report_dimensions
@@ -202,12 +202,12 @@ def score_texts(texts, sources=None):
     sources = sources or {}
     skipped = set()
     scored = {}
-    with jev_core.make_client() as client:
+    with scoring.make_client() as client:
         for key, text in texts.items():
             case = key.rsplit("__", 2)[0]
             if case not in sources:
                 skipped.add(case)
-            scored[key] = jev_core.score_text(client, CONFIG, text, source=sources.get(case))
+            scored[key] = scoring.score_text(client, CONFIG, text, source=sources.get(case))
     for case in sorted(skipped):
         print(f"warning: no source found for {case}; its with_source dimensions were not scored",
               file=sys.stderr)
@@ -304,7 +304,7 @@ def write_markdown_report(scored, texts, plugin_root, case_glob, out_dir=None):
     report_path = out_dir / "report.md"
 
     lines = [
-        "# Clean-mode Jev scoring report",
+        "# Clean-mode scoring report",
         "",
         f"Generated {generated_at.strftime('%Y-%m-%dT%H:%M:%SZ')} · case filter `{case_glob}` · {runs} run(s) per arm.",
         "",
@@ -392,7 +392,7 @@ def main():
     print_report(scored, texts)
 
     report_path = write_markdown_report(scored, texts, args.plugin_root, args.case)
-    print(f"Jev report: {report_path}")
+    print(f"Report: {report_path}")
 
     if args.out:
         Path(args.out).write_text(json.dumps(scored, indent=2))

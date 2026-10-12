@@ -1,7 +1,7 @@
 """Turn Jev scores into the Markdown summary posted on the pull request."""
 from dataclasses import dataclass
 
-import jev_core
+import scoring
 
 MARKER = "<!-- clean-mode-check -->"
 GUIDE_URL = (
@@ -15,7 +15,7 @@ MAX_UNSCORED_LISTED = 20
 @dataclass(frozen=True)
 class ItemResult:
     label: str  # "PR description" or a file path in backticks
-    raw: dict | None  # jev_core.score_text output; None when not scored
+    raw: dict | None  # scoring.score_text output; None when not scored
     note: str = ""  # why it was not scored
 
 
@@ -25,7 +25,7 @@ def escape_cell(text):
 
 def ci_rubrics(config):
     """Report rows that judge a document on its own, in report order."""
-    return [d for d in config.report_dimensions if config.state_of(d) == jev_core.DOCUMENT_ONLY]
+    return [d for d in config.report_dimensions if config.state_of(d) == scoring.DOCUMENT_ONLY]
 
 
 def overall(config, raw):
