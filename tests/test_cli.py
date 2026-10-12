@@ -60,11 +60,35 @@ def test_scores_docs_and_pr_then_posts_one_comment(pr):
     assert pr["summary"].read_text().strip() == body.strip()
 
 
-def test_missing_api_key_skips_without_posting(pr, monkeypatch):
+def test_missing_api_key_skips_without_posting(pr, monkeypatch, capsys):
     monkeypatch.delenv("TYPESAFE_API_KEY")
     judge, post = FakeJudge(), RecordingPost()
     assert run(pr, judge, post) == 0
     assert judge.calls == [] and post.calls == []
+    assert "::notice::TYPESAFE_API_KEY is not set" in capsys.readouterr().out
+
+
+def test_missing_key_notice_names_the_chosen_judges_key(pr, monkeypatch, capsys):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    judge, post = FakeJudge(), RecordingPost()
+    assert run(pr, judge, post, extra=["--judge", "openai"]) == 0
+    assert judge.calls == [] and post.calls == []
+    assert "::notice::OPENAI_API_KEY is not set" in capsys.readouterr().out
+
+
+def test_judge_flag_builds_that_judge_with_retries_off(pr, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    built = []
+
+    def make_judge(name, retries=None):
+        built.append((name, retries))
+        return FakeJudge()
+
+    monkeypatch.setattr(clean_mode_check.judges, "make_judge", make_judge)
+    assert clean_mode_check.main(
+        ["--event-path", str(pr["event"]), "--judge", "openai"], post=RecordingPost()
+    ) == 0
+    assert built == [("openai", 0)]
 
 
 def test_one_failed_judge_call_marks_only_that_item(pr):

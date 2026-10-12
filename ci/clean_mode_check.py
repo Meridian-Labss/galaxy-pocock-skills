@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Score the prose in a pull request against clean-mode with Jev.
+"""Score the prose in a pull request against clean-mode with a judging model.
 
-Advisory: weak prose or an outage at Jev or GitHub never fails the run.
+Advisory: weak prose or an outage at the judge or GitHub never fails the run.
 Bugs in this tool or in dimensions.json do.
 
-    python ci/clean_mode_check.py --base main --pr-title "..." --pr-body-file body.md
+    python ci/clean_mode_check.py --base main --pr-title "..." --pr-body-file body.md [--judge openai]
 
 In GitHub Actions, --event-path (default $GITHUB_EVENT_PATH) supplies the
 base commit, PR title, body, and number, and --post updates the PR comment.
@@ -27,9 +27,11 @@ from post_comment import fetch_pull_request, upsert_comment  # noqa: E402
 from render import MARKER, ItemResult, render  # noqa: E402
 
 PR_LABEL = "PR description"
-# Jev accepts at most 32k tokens for the document plus its longest question
-# (about 400 tokens today). At a worst case of 2.5 characters per token
-# (code-heavy Markdown), 75,000 characters is about 30k tokens, leaving room.
+# TypeSafe's Jev accepts at most 32k tokens for the document plus its longest
+# question (about 400 tokens today). At a worst case of 2.5 characters per
+# token (code-heavy Markdown), 75,000 characters is about 30k tokens, leaving
+# room. OpenAI publishes no limit for its Decisions API, so the same cap
+# applies to both judges.
 DEFAULT_MAX_CHARS = 75000
 # What a failed GitHub API call can raise: HTTP and network errors are OSErrors,
 # bad JSON is ValueError, truncated responses raise HTTPException, and a
@@ -53,6 +55,7 @@ def parse_args(argv):
     parser.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
     parser.add_argument("--min-lines", type=int, default=3)
     parser.add_argument("--post", action="store_true", help="create or update the PR comment")
+    parser.add_argument("--judge", choices=judges.NAMES, default="typesafe", help="which judging model scores the prose")
     return parser.parse_args(argv)
 
 
@@ -109,8 +112,9 @@ def score_items(judge, config, items):
 def main(argv=None, judge=None, post=upsert_comment, fetch=fetch_pull_request):
     args = parse_args(argv)
     config = scoring.load_config()
-    if not os.environ.get("TYPESAFE_API_KEY"):
-        print("::notice::TYPESAFE_API_KEY is not set (normal for PRs from forks); skipping the clean-mode check")
+    key = judges.API_KEY_ENV[args.judge]
+    if not os.environ.get(key):
+        print(f"::notice::{key} is not set (normal for PRs from forks); skipping the clean-mode check")
         return 0
 
     try:
@@ -138,7 +142,7 @@ def main(argv=None, judge=None, post=upsert_comment, fetch=fetch_pull_request):
     else:
         unscored.append(ItemResult(PR_LABEL, None, "no description"))
 
-    with judge or judges.make_judge("typesafe", retries=0) as active:
+    with judge or judges.make_judge(args.judge, retries=0) as active:
         results = score_items(active, config, items) + unscored
 
     markdown = render(config, results, selection.too_large, selection.over_limit, args.max_chars, args.max_files)
