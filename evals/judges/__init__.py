@@ -44,4 +44,7 @@ def make_judge(name, retries=None):
     if name == "typesafe":
         from judges.typesafe import TypeSafeJudge
         return TypeSafeJudge(retries=retries)
+    if name == "openai":
+        from judges.openai import OpenAIJudge
+        return OpenAIJudge(retries=retries)
     raise ValueError(f"unknown judge {name!r}; choose one of: {', '.join(NAMES)}")
