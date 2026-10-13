@@ -10,6 +10,13 @@ from typing import Protocol
 # Each judge reads its own API key from this environment variable.
 API_KEY_ENV = {"typesafe": "TYPESAFE_API_KEY", "openai": "OPENAI_API_KEY"}
 NAMES = tuple(API_KEY_ENV)
+# Shown on the pull request comment under the intro. OpenAI's ratings agreed
+# poorly with TypeSafe's on clean-mode's formatting rules, and its reported
+# confidence did not predict which ratings were off, so readers are told to
+# treat them as rough.
+REPORT_NOTES = {
+    "openai": "Ratings from the OpenAI judge are approximate: treat Fair or Poor as a prompt to look, not a verdict.",
+}
 
 
 class JudgeError(Exception):

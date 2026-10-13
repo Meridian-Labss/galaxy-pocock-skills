@@ -4,6 +4,7 @@ import subprocess
 import pytest
 
 import clean_mode_check
+import judges
 from conftest import git
 from fake_judge import FakeJudge
 from render import MARKER
@@ -267,3 +268,16 @@ def test_file_labels_stay_plain_without_a_head_commit(pr):
     post = RecordingPost()
     assert run(pr, FakeJudge(), post) == 0
     assert "| `keep.md` |" in post.calls[0][2]
+
+
+def test_openai_judge_adds_the_approximate_ratings_note(pr, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    post = RecordingPost()
+    assert run(pr, FakeJudge(), post, extra=["--judge", "openai"]) == 0
+    assert judges.REPORT_NOTES["openai"] in post.calls[0][2]
+
+
+def test_typesafe_judge_adds_no_note(pr):
+    post = RecordingPost()
+    assert run(pr, FakeJudge(), post) == 0
+    assert "approximate" not in post.calls[0][2]

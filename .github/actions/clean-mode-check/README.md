@@ -1,6 +1,6 @@
 # Pull requests get an advisory writing-quality comment
 
-This action scores a pull request's description and its changed Markdown docs against the [clean-mode](../../../skills/productivity/clean-mode/SKILL.md) writing guide, then posts one comment rating each from Poor to Excellent, with what needs work and why. A low rating never fails the build.
+This action scores a pull request's description and its changed Markdown docs against the [clean-mode](../../../skills/productivity/clean-mode/SKILL.md) writing guide, then posts one comment rating each from Poor to Excellent, with what needs work and how to improve it. A low rating never fails the build.
 
 Scoring uses a judging model: TypeSafe's Jev by default, or OpenAI's Decisions API.
 
@@ -63,7 +63,7 @@ Comment-triggered runs only work once this workflow is on the default branch. Gi
 
 | Input | Default | Effect |
 |---|---|---|
-| `judge` | `typesafe` | Which judging model scores the prose: `typesafe` or `openai`. |
+| `judge` | `typesafe` | Which judging model scores the prose: `typesafe` or `openai`. OpenAI's ratings are rougher, and the comment says so. |
 | `typesafe-api-key` | none | Used when `judge` is `typesafe`. Without it, the check skips. |
 | `openai-api-key` | none | Used when `judge` is `openai`. Without it, the check skips. |
 | `github-token` | the workflow's token | Used to post the comment. |

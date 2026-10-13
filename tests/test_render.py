@@ -49,9 +49,15 @@ def test_needs_work_breaks_ties_by_file_order_and_caps_at_three():
     ]
 
 
-def test_needs_work_carries_the_level_text_the_judge_found_most_likely():
-    _, _, text = needs_work(CONFIG, scores(levels={"padding": 1}))[0]
-    assert text == CONFIG.dimensions["padding"]["criteria"][1]
+def test_needs_work_carries_the_rubrics_improvement_tip():
+    _, _, tip = needs_work(CONFIG, scores(levels={"padding": 1}))[0]
+    assert tip == CONFIG.dimensions["padding"]["advice"]
+
+
+def test_every_rubric_has_a_label_and_an_improvement_tip():
+    for name, entry in CONFIG.dimensions.items():
+        assert entry.get("label"), name
+        assert entry.get("advice"), name
 
 
 def test_render_lists_scored_and_unscored_items():
@@ -102,16 +108,29 @@ def test_item_with_nothing_below_good_needs_no_work():
     assert "<details>" not in md
 
 
-def test_each_explanation_appears_once_with_its_rating_and_items():
-    padding_text = CONFIG.dimensions["padding"]["criteria"][0]
+def test_how_to_improve_gives_each_tip_once_with_every_items_rating():
+    tip = CONFIG.dimensions["padding"]["advice"]
     md = render(CONFIG, [
         ItemResult("`a.md`", scores(levels={"padding": 0})),
-        ItemResult("`b.md`", scores(levels={"padding": 0})),
+        ItemResult("`b.md`", scores(levels={"padding": 1})),
     ])
-    assert md.count(padding_text) == 1
+    assert md.count(tip) == 1
     details = md[md.index("<details>"):md.index("</details>")]
-    assert "<summary>Why these ratings</summary>" in details
-    assert f"- No padding, Poor: {padding_text} (`a.md`, `b.md`)" in details
+    assert "<summary>How to improve</summary>" in details
+    assert f"- No padding: {tip} (`a.md`: Poor, `b.md`: Fair)" in details
+    assert CONFIG.dimensions["padding"]["criteria"][0] not in md
+
+
+def test_rubric_without_a_tip_falls_back_to_the_level_text(tmp_path):
+    import json
+    raw = json.loads(scoring.DEFAULT_CONFIG_PATH.read_text())
+    del raw["dimensions"]["padding"]["advice"]
+    path = tmp_path / "dimensions.json"
+    path.write_text(json.dumps(raw))
+    config = scoring.load_config(path)
+    raw_scores = scoring.score_text(FakeJudge(levels={"padding": 0}), config, "doc", states={scoring.DOCUMENT_ONLY})
+    _, _, tip = needs_work(config, raw_scores)[0]
+    assert tip == config.dimensions["padding"]["criteria"][0]
 
 
 def test_rubric_without_a_label_falls_back_to_its_code_name(tmp_path):
@@ -128,3 +147,13 @@ def test_rubric_without_a_label_falls_back_to_its_code_name(tmp_path):
 def test_no_per_item_sections():
     md = render(CONFIG, [ItemResult("`a.md`", scores(levels={"padding": 0}))])
     assert "### `a.md`" not in md
+
+
+def test_judge_note_appears_under_the_intro_when_given():
+    md = render(CONFIG, [ItemResult("`a.md`", scores())], judge_note="Ratings are approximate.")
+    assert "Ratings are approximate." in md
+    assert md.index("Ratings are approximate.") < md.index("| Item |")
+
+
+def test_no_judge_note_by_default():
+    assert "approximate" not in render(CONFIG, [ItemResult("`a.md`", scores())])
