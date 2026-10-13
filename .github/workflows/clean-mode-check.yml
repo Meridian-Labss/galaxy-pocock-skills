@@ -29,7 +29,8 @@ jobs:
       # copy of the action is safe, and lets the action test its own changes.
       - uses: ./.github/actions/clean-mode-check
         with:
-          typesafe-api-key: ${{ secrets.TYPESAFE_API_KEY }}
+          judge: openai
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
 
   on-comment:
     # Comment runs get secrets even on pull requests from forks, so only
@@ -52,4 +53,5 @@ jobs:
       # With secrets in play, never run the pull request's own copy of the action.
       - uses: Meridian-Labss/galaxy-pocock-skills/.github/actions/clean-mode-check@main
         with:
-          typesafe-api-key: ${{ secrets.TYPESAFE_API_KEY }}
+          judge: openai
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
