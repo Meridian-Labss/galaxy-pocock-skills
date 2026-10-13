@@ -145,7 +145,10 @@ def main(argv=None, judge=None, post=upsert_comment, fetch=fetch_pull_request):
     with judge or judges.make_judge(args.judge, retries=0) as active:
         results = score_items(active, config, items) + unscored
 
-    markdown = render(config, results, selection.too_large, selection.over_limit, args.max_chars, args.max_files)
+    markdown = render(
+        config, results, selection.too_large, selection.over_limit, args.max_chars, args.max_files,
+        judge_note=judges.REPORT_NOTES.get(args.judge),
+    )
     print(markdown)
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_path:

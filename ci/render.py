@@ -87,7 +87,7 @@ def improvements(config, scored):
     return grouped
 
 
-def render(config, results, too_large=(), over_limit=(), max_chars=0, max_files=0):
+def render(config, results, too_large=(), over_limit=(), max_chars=0, max_files=0, judge_note=None):
     lines = [
         MARKER,
         "## Clean-mode check",
@@ -96,6 +96,8 @@ def render(config, results, too_large=(), over_limit=(), max_chars=0, max_files=
         f"from Poor through Fair and Good to Excellent. See the [clean-mode guide]({GUIDE_URL}).",
         "",
     ]
+    if judge_note:
+        lines += [judge_note, ""]
     scored = sorted((r for r in results if r.raw is not None), key=lambda r: overall(config, r.raw))
     if scored:
         lines += ["| Item | Rating | Needs work |", "|---|---|---|"]
