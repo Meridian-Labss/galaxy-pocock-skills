@@ -48,15 +48,22 @@ def rubric_label(config, name):
     return config.dimensions[name].get("label", name)
 
 
-def level_text(config, name, answer):
-    """Criterion text for the level the judge found most likely."""
+def improvement_tip(config, name, answer):
+    """How to raise this rubric's rating.
+
+    Falls back to the level the judge found most likely when the rubric has
+    no tip of its own.
+    """
+    tip = config.dimensions[name].get("advice")
+    if tip:
+        return tip
     probabilities = answer["probabilities"]
     level = int(max(probabilities, key=probabilities.get))
     return config.dimensions[name]["criteria"][level]
 
 
 def needs_work(config, raw, count=NEEDS_WORK_COUNT):
-    """Single rubrics rated below Good, worst first, as (plain name, rating, level text).
+    """Single rubrics rated below Good, worst first, as (plain name, rating, improvement tip).
 
     Composites are replaced by their factors, since only single rubrics have
     level text. Ties go to the rubric listed first in dimensions.json.
@@ -66,17 +73,17 @@ def needs_work(config, raw, count=NEEDS_WORK_COUNT):
     weak = [n for n in single if rating(config.normalized(n, raw[n]["score"])) in NEEDS_WORK_RATINGS]
     weak.sort(key=lambda n: (config.normalized(n, raw[n]["score"]), file_order.index(n)))
     return [
-        (rubric_label(config, n), rating(config.normalized(n, raw[n]["score"])), level_text(config, n, raw[n]))
+        (rubric_label(config, n), rating(config.normalized(n, raw[n]["score"])), improvement_tip(config, n, raw[n]))
         for n in weak[:count]
     ]
 
 
-def explanations(config, scored):
-    """Each weak rubric's level text once, with the items it applies to, worst items first."""
+def improvements(config, scored):
+    """Each weak rubric's tip once, with the items it applies to and their ratings, worst items first."""
     grouped = {}
     for r in scored:
-        for label, word, text in needs_work(config, r.raw):
-            grouped.setdefault((label, word, text), []).append(r.label)
+        for label, word, tip in needs_work(config, r.raw):
+            grouped.setdefault((label, tip), []).append((r.label, word))
     return grouped
 
 
@@ -96,12 +103,12 @@ def render(config, results, too_large=(), over_limit=(), max_chars=0, max_files=
             weak = ", ".join(f"{label} ({word})" for label, word, _ in needs_work(config, r.raw)) or "none"
             lines.append(f"| {escape_cell(r.label)} | {rating(overall(config, r.raw))} | {weak} |")
         lines.append("")
-        grouped = explanations(config, scored)
+        grouped = improvements(config, scored)
         if grouped:
-            lines += ["<details><summary>Why these ratings</summary>", ""]
+            lines += ["<details><summary>How to improve</summary>", ""]
             lines += [
-                f"- {label}, {word}: {text} ({', '.join(items)})"
-                for (label, word, text), items in grouped.items()
+                f"- {label}: {tip} ({', '.join(f'{item}: {word}' for item, word in items)})"
+                for (label, tip), items in grouped.items()
             ]
             lines += ["", "</details>", ""]
 

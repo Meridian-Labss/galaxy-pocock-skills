@@ -1,6 +1,6 @@
 # Pull requests get an advisory writing-quality comment
 
-This action scores a pull request's description and its changed Markdown docs against the [clean-mode](../../../skills/productivity/clean-mode/SKILL.md) writing guide, then posts one comment rating each from Poor to Excellent, with what needs work and why. A low rating never fails the build.
+This action scores a pull request's description and its changed Markdown docs against the [clean-mode](../../../skills/productivity/clean-mode/SKILL.md) writing guide, then posts one comment rating each from Poor to Excellent, with what needs work and how to improve it. A low rating never fails the build.
 
 Scoring uses a judging model: TypeSafe's Jev by default, or OpenAI's Decisions API.
 
