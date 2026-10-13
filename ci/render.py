@@ -8,7 +8,11 @@ GUIDE_URL = (
     "https://github.com/Meridian-Labss/galaxy-pocock-skills/blob/main/"
     "skills/productivity/clean-mode/SKILL.md"
 )
-WEAKEST_COUNT = 3
+NEEDS_WORK_COUNT = 3
+# A rubric's four levels, worst to best. A 0-1 score rounds to the nearest one.
+RATINGS = ("Poor", "Fair", "Good", "Excellent")
+# Ratings listed under "Needs work".
+NEEDS_WORK_RATINGS = ("Poor", "Fair")
 MAX_UNSCORED_LISTED = 20
 
 
@@ -33,6 +37,17 @@ def overall(config, raw):
     return sum(config.normalized(d, raw[d]["score"]) for d in rubrics) / len(rubrics)
 
 
+def rating(score):
+    """The word for a 0-1 score: the nearest of the four rubric levels."""
+    # Round half up: Python's round() sends exact halves to the even level.
+    return RATINGS[int(score * (len(RATINGS) - 1) + 0.5)]
+
+
+def rubric_label(config, name):
+    """The rubric's plain name for readers, or its code name if it has none."""
+    return config.dimensions[name].get("label", name)
+
+
 def level_text(config, name, answer):
     """Criterion text for the level the judge found most likely."""
     probabilities = answer["probabilities"]
@@ -40,19 +55,19 @@ def level_text(config, name, answer):
     return config.dimensions[name]["criteria"][level]
 
 
-def weakest(config, raw, count=WEAKEST_COUNT):
-    """Lowest-scoring single rubrics below full marks, as (name, 0-1 score, level text).
+def needs_work(config, raw, count=NEEDS_WORK_COUNT):
+    """Single rubrics rated below Good, worst first, as (plain name, rating, level text).
 
     Composites are replaced by their factors, since only single rubrics have
     level text. Ties go to the rubric listed first in dimensions.json.
     """
     file_order = list(config.dimensions)
     single = [f for d in ci_rubrics(config) for f in config.composites.get(d, (d,))]
-    single = [n for n in single if config.normalized(n, raw[n]["score"]) < 1]
-    single.sort(key=lambda n: (config.normalized(n, raw[n]["score"]), file_order.index(n)))
+    weak = [n for n in single if rating(config.normalized(n, raw[n]["score"])) in NEEDS_WORK_RATINGS]
+    weak.sort(key=lambda n: (config.normalized(n, raw[n]["score"]), file_order.index(n)))
     return [
-        (n, config.normalized(n, raw[n]["score"]), level_text(config, n, raw[n]))
-        for n in single[:count]
+        (rubric_label(config, n), rating(config.normalized(n, raw[n]["score"])), level_text(config, n, raw[n]))
+        for n in weak[:count]
     ]
 
 
@@ -60,8 +75,8 @@ def explanations(config, scored):
     """Each weak rubric's level text once, with the items it applies to, worst items first."""
     grouped = {}
     for r in scored:
-        for name, _, text in weakest(config, r.raw):
-            grouped.setdefault((name, text), []).append(r.label)
+        for label, word, text in needs_work(config, r.raw):
+            grouped.setdefault((label, word, text), []).append(r.label)
     return grouped
 
 
@@ -70,23 +85,23 @@ def render(config, results, too_large=(), over_limit=(), max_chars=0, max_files=
         MARKER,
         "## Clean-mode check",
         "",
-        "Advisory only. Each file is scored as a whole file, not just this PR's changes. "
-        f"Scores run from 0 to 1. See the [clean-mode guide]({GUIDE_URL}).",
+        "Advisory only. Each file is rated as a whole, not just this PR's changes, "
+        f"from Poor through Fair and Good to Excellent. See the [clean-mode guide]({GUIDE_URL}).",
         "",
     ]
     scored = sorted((r for r in results if r.raw is not None), key=lambda r: overall(config, r.raw))
     if scored:
-        lines += ["| Item | Score | Weakest |", "|---|---|---|"]
+        lines += ["| Item | Rating | Needs work |", "|---|---|---|"]
         for r in scored:
-            weak = ", ".join(f"`{n}` {s:.2f}" for n, s, _ in weakest(config, r.raw)) or "none"
-            lines.append(f"| {escape_cell(r.label)} | {overall(config, r.raw):.2f} | {weak} |")
+            weak = ", ".join(f"{label} ({word})" for label, word, _ in needs_work(config, r.raw)) or "none"
+            lines.append(f"| {escape_cell(r.label)} | {rating(overall(config, r.raw))} | {weak} |")
         lines.append("")
         grouped = explanations(config, scored)
         if grouped:
-            lines += ["<details><summary>What the weakest rubrics mean</summary>", ""]
+            lines += ["<details><summary>Why these ratings</summary>", ""]
             lines += [
-                f"- `{name}`: {text} ({', '.join(labels)})"
-                for (name, text), labels in grouped.items()
+                f"- {label}, {word}: {text} ({', '.join(items)})"
+                for (label, word, text), items in grouped.items()
             ]
             lines += ["", "</details>", ""]
 
