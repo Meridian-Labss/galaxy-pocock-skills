@@ -63,7 +63,7 @@ Comment-triggered runs only work once this workflow is on the default branch. Gi
 
 | Input | Default | Effect |
 |---|---|---|
-| `judge` | `typesafe` | Which judging model scores the prose: `typesafe` or `openai`. |
+| `judge` | `typesafe` | Which judging model scores the prose: `typesafe` or `openai`. OpenAI's ratings are rougher, and the comment says so. |
 | `typesafe-api-key` | none | Used when `judge` is `typesafe`. Without it, the check skips. |
 | `openai-api-key` | none | Used when `judge` is `openai`. Without it, the check skips. |
 | `github-token` | the workflow's token | Used to post the comment. |

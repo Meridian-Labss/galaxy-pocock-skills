@@ -147,3 +147,13 @@ def test_rubric_without_a_label_falls_back_to_its_code_name(tmp_path):
 def test_no_per_item_sections():
     md = render(CONFIG, [ItemResult("`a.md`", scores(levels={"padding": 0}))])
     assert "### `a.md`" not in md
+
+
+def test_judge_note_appears_under_the_intro_when_given():
+    md = render(CONFIG, [ItemResult("`a.md`", scores())], judge_note="Ratings are approximate.")
+    assert "Ratings are approximate." in md
+    assert md.index("Ratings are approximate.") < md.index("| Item |")
+
+
+def test_no_judge_note_by_default():
+    assert "approximate" not in render(CONFIG, [ItemResult("`a.md`", scores())])
