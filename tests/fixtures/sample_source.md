@@ -1,0 +1,1 @@
+So we noticed that after deploys people sometimes get way more requests than they should, I think it's because the counters live in memory, which is a bit of a historical thing from when we had one pod. Anyway we should probably move them to Redis.

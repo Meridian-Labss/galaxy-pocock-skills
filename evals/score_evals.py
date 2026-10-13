@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Score clean-mode with/without outputs on TypeSafe Jev dimensions.
+"""Score clean-mode with/without outputs with a judging model.
 
-    pip install typesafe-sdk
-    export TYPESAFE_API_KEY=...
-    python3 evals/score_with_jev.py
+    pip install -r evals/requirements.txt
+    export TYPESAFE_API_KEY=...    # or OPENAI_API_KEY with --judge openai
+    python3 evals/score_evals.py [--judge typesafe|openai]
 
 Runs `claude plugin eval` for the given case glob (default: every clean-mode
 case), then scores each captured with/without output on dimensions taken
@@ -16,11 +16,14 @@ questions themselves (instructions plus ordered criteria levels) live in
 dimensions.json next to this script - edit that file to change what gets
 measured. The response text is read directly from each run's trace, not from
 a grader - the cases carry no LLM graders, so this is the only scoring in
-play; Jev is the sole judge. Use --from to re-score an
-existing `claude plugin eval --json` result instead of running a new eval.
+play; the chosen judge (TypeSafe's Jev by default, or OpenAI's Decisions API)
+is the only one. Use --from to re-score an existing `claude plugin eval
+--json` result instead of running a new eval, or --from-report to re-score a
+saved report's outputs, for example with the other judge.
 """
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -30,57 +33,39 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 try:
-    from typesafe_sdk import Score, TypeSafeClient
-except ImportError:
-    sys.exit("typesafe-sdk is not installed. Run: pip install typesafe-sdk")
+    import judges
+    import scoring
+except ImportError as e:
+    sys.exit(f"could not import the scoring modules ({e}). Run: pip install -r evals/requirements.txt")
 
-# The questions live in dimensions.json next to this script: one entry per
-# Jev Score question (instructions + ordered worst-to-best criteria levels),
-# plus which factors compose "scannability" and which dimensions the report
-# shows. Scannability isn't one snap judgment - it depends on independent
+# The questions live in dimensions.json next to this script and are loaded by
+# scoring, which the clean-mode CI check shares, so both ask the judge identical
+# questions. Scannability isn't one snap judgment: it depends on independent
 # factors, so each gets its own atomic question per Jev's guidance, combined
-# in code by score_texts(). The composite is the MEAN of its factors: a min()
-# was tried first and collapsed the composite to section_scannability alone
-# (uniformly the lowest factor for both arms), masking the other factors.
-DIMENSIONS_FILE = Path(__file__).with_name("dimensions.json")
-_config = json.loads(DIMENSIONS_FILE.read_text())
-
+# by scoring.score_text. The composite is the MEAN of its factors: a min()
+# was tried first and collapsed the composite to one factor (the same factor
+# was lowest for both arms), masking the other factors.
+#
 # Some questions need the source material the document was written from, which
-# means a second Jev call against a different state. They are kept as separate
+# means a second judge call against a different layout. They are kept as separate
 # calls on purpose: the sources are deliberately unedited prose, and a judge
 # that has just read one anchors on it when scoring the document's register.
-STATE_TEMPLATES = _config.get("state", {"document_only": "{document}"})
-DIMENSIONS_BY_STATE = {}
-for _name, _d in _config["dimensions"].items():
-    _state = _d.get("state", "document_only")
-    if _state not in STATE_TEMPLATES:
-        sys.exit(f"{DIMENSIONS_FILE}: dimension {_name} wants unknown state {_state!r}")
-    DIMENSIONS_BY_STATE.setdefault(_state, {})[_name] = Score(
-        instructions=_d["instructions"], criteria=_d["criteria"]
-    )
-DIMENSIONS = {n: q for qs in DIMENSIONS_BY_STATE.values() for n, q in qs.items()}
-# A composite is a report row with no question of its own: it is the mean of
-# its factors, each normalised by its own ladder first. Factors stay out of
-# report_dimensions and are listed under their composite instead.
-COMPOSITES = {name: tuple(factors) for name, factors in _config.get("composites", {}).items()}
-REPORT_DIMENSIONS = list(_config["report_dimensions"])
+try:
+    CONFIG = scoring.load_config()
+except scoring.ConfigError as e:
+    sys.exit(str(e))
+COMPOSITES = CONFIG.composites
+REPORT_DIMENSIONS = CONFIG.report_dimensions
 
-# A Jev score is a position on the dimension's own criteria ladder, so its
+# A score is a position on the dimension's own criteria ladder, so its
 # range is set by how many levels that dimension defines: 0-2 for a 3-level
 # question, 0-4 for a 5-level one. Raw scores stay on their native ladder
 # everywhere (--out keeps them, so a score still maps onto its criterion
 # text); the report divides by the dimension's top level and prints a 0-1
 # fraction, so columns built from different ladders are comparable and a
-# delta between two of them carries no unit to misread.
-DIMENSION_TOP = {name: len(d["criteria"]) - 1 for name, d in _config["dimensions"].items()}
-# A composite is already built from normalised factors, so its own ladder is
-# 0-1 and the report's division by the top level is a no-op.
-for _name in COMPOSITES:
-    DIMENSION_TOP[_name] = 1
-
-_missing = [d for d in REPORT_DIMENSIONS if d not in DIMENSION_TOP]
-if _missing:
-    sys.exit(f"{DIMENSIONS_FILE}: report_dimensions names nothing: {', '.join(_missing)}")
+# delta between two of them carries no unit to misread. A composite is
+# already 0-1, so its top level is 1.
+DIMENSION_TOP = {name: CONFIG.top(name) for name in [*CONFIG.dimensions, *CONFIG.composites]}
 
 
 def run_eval(case_glob, runs, plugin_root):
@@ -188,7 +173,7 @@ def load_sources(plugin_root="."):
 def texts_from_report(report_path):
     """Pull the captured outputs back out of a previous run's report.md.
 
-    Re-scoring these costs one Jev call per output and no eval runs at all, so
+    Re-scoring these costs one judge call per output and no eval runs at all, so
     a dimension change can be measured against outputs that already exist
     rather than against freshly generated ones.
     """
@@ -217,39 +202,15 @@ def cleanup_kept_dirs(kept_dirs):
         shutil.rmtree(d, ignore_errors=True)
 
 
-def score_texts(texts, sources=None):
+def score_texts(judge, texts, sources=None):
     sources = sources or {}
     skipped = set()
     scored = {}
-    with TypeSafeClient() as client:
-        for key, text in texts.items():
-            case = key.rsplit("__", 2)[0]
-            raw = {}
-            for state, questions in DIMENSIONS_BY_STATE.items():
-                template = STATE_TEMPLATES[state]
-                if "{source}" in template and case not in sources:
-                    skipped.add(case)
-                    continue
-                response = client.system_one(
-                    state=template.format(document=text, source=sources.get(case, "")),
-                    questions=questions,
-                )
-                raw.update({
-                    qid: {
-                        "score": ans.score,
-                        "confidence": ans.confidence,
-                        "probabilities": {str(k): v for k, v in ans.probabilities.items()},
-                    }
-                    for qid, ans in response.answers.items()
-                })
-            for name, factors in COMPOSITES.items():
-                parts = [raw[f]["score"] / DIMENSION_TOP[f] for f in factors]
-                confidences = [raw[f]["confidence"] for f in factors]
-                raw[name] = {
-                    "score": sum(parts) / len(parts),
-                    "confidence": sum(confidences) / len(confidences),
-                }
-            scored[key] = raw
+    for key, text in texts.items():
+        case = key.rsplit("__", 2)[0]
+        if case not in sources:
+            skipped.add(case)
+        scored[key] = scoring.score_text(judge, CONFIG, text, source=sources.get(case))
     for case in sorted(skipped):
         print(f"warning: no source found for {case}; its with_source dimensions were not scored",
               file=sys.stderr)
@@ -337,18 +298,19 @@ def print_report(scored, texts=None):
         print()
 
 
-def write_markdown_report(scored, texts, plugin_root, case_glob, out_dir=None):
+def write_markdown_report(scored, texts, plugin_root, case_glob, judge, out_dir=None):
     grouped = group_by_case(scored)
     runs = max((len(arms["with"]) for arms in grouped.values()), default=0)
     generated_at = datetime.now(timezone.utc)
-    out_dir = Path(out_dir) if out_dir else Path(plugin_root) / "evals" / "results" / (generated_at.strftime("%Y-%m-%dT%H-%M-%S") + "-jev")
+    out_dir = Path(out_dir) if out_dir else Path(plugin_root) / "evals" / "results" / (generated_at.strftime("%Y-%m-%dT%H-%M-%S") + f"-{judge.name}")
     out_dir.mkdir(parents=True, exist_ok=True)
     report_path = out_dir / "report.md"
 
     lines = [
-        "# Clean-mode Jev scoring report",
+        "# Clean-mode scoring report",
         "",
-        f"Generated {generated_at.strftime('%Y-%m-%dT%H:%M:%SZ')} · case filter `{case_glob}` · {runs} run(s) per arm.",
+        f"Generated {generated_at.strftime('%Y-%m-%dT%H:%M:%SZ')} · judge `{judge.name}` (model `{judge.model}`) · "
+        f"case filter `{case_glob}` · {runs} run(s) per arm.",
         "",
         f"Dimensions: {', '.join(REPORT_DIMENSIONS)}.",
         "",
@@ -411,15 +373,20 @@ def write_markdown_report(scored, texts, plugin_root, case_glob, out_dir=None):
     return report_path
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--case", default="clean-mode-*", help="claude plugin eval --case glob")
     parser.add_argument("--runs", type=int, default=1, help="runs per arm per case")
     parser.add_argument("--from", dest="from_json", help="reuse an existing `claude plugin eval --json` result instead of running a new eval")
     parser.add_argument("--from-report", help="re-score the outputs captured in a previous run's report.md, with no eval run at all")
     parser.add_argument("--plugin-root", default=".", help="plugin directory passed to claude plugin eval")
-    parser.add_argument("--out", help="write raw Jev scores as JSON to this path")
-    args = parser.parse_args()
+    parser.add_argument("--judge", choices=judges.NAMES, default="typesafe", help="which judging model scores the outputs")
+    parser.add_argument("--out", help="write raw scores as JSON to this path")
+    args = parser.parse_args(argv)
+    # Check the key before running an eval, which is slow and costs money.
+    key = judges.API_KEY_ENV[args.judge]
+    if not os.environ.get(key):
+        sys.exit(f"{key} is not set; the {args.judge} judge needs it")
 
     if args.from_report:
         texts = texts_from_report(args.from_report)
@@ -430,11 +397,16 @@ def main():
     if not texts:
         sys.exit("no last_message text found in eval result")
 
-    scored = score_texts(texts, load_sources(args.plugin_root))
+    # A judge failure ends the run: an eval report with gaps is not worth comparing.
+    try:
+        with judges.make_judge(args.judge) as judge:
+            scored = score_texts(judge, texts, load_sources(args.plugin_root))
+    except judges.JudgeError as e:
+        sys.exit(f"{args.judge} judge failed: {e}")
     print_report(scored, texts)
 
-    report_path = write_markdown_report(scored, texts, args.plugin_root, args.case)
-    print(f"Jev report: {report_path}")
+    report_path = write_markdown_report(scored, texts, args.plugin_root, args.case, judge)
+    print(f"Report: {report_path}")
 
     if args.out:
         Path(args.out).write_text(json.dumps(scored, indent=2))
